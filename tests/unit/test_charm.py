@@ -138,6 +138,32 @@ class TestCharm(unittest.TestCase):
             BlockedStatus("Waiting for `fiveg_nrf` relation to be created"),
         )
 
+    @patch("charm.check_output")
+    @patch("ops.model.Container.pull")
+    @patch("ops.model.Container.exists")
+    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("ops.Container.push")
+    @patch("ops.model.Container.restart")
+    def test_given_udm_charm_in_active_status_when_nrf_relation_breaks_then_status_is_blocked(
+        self, _, __, patched_nrf_url, patch_exists, patch_pull, patch_check_output
+    ):
+        pod_ip = "1.1.1.1"
+        patch_check_output.return_value = pod_ip.encode()
+        patch_pull.return_value = StringIO("super different config file content")
+        self.harness.set_can_connect(container=self.container_name, val=True)
+        patched_nrf_url.return_value = VALID_NRF_URL
+        nrf_relation_id = self._create_nrf_relation()
+        self.harness.charm._storage_is_attached = Mock(return_value=True)
+        patch_exists.side_effect = [True, False, True, False]
+        self.harness.container_pebble_ready("udm")
+
+        self.harness.remove_relation(nrf_relation_id)
+
+        self.assertEqual(
+            self.harness.model.unit.status,
+            BlockedStatus("Waiting for fiveg_nrf relation"),
+        )
+
     def test_given_container_can_connect_and_fiveg_nrf_relation_is_created_and_not_available_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
         self,
     ):
@@ -243,16 +269,10 @@ class TestCharm(unittest.TestCase):
     @patch("charm.check_output")
     @patch("ops.model.Container.pull")
     @patch("ops.model.Container.exists")
-    @patch("ops.Container.push")
     @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("ops.Container.push")
     def test_given_config_file_is_written_and_is_not_changed_when_configure_sdcore_udm_is_called_then_after_writting_config_file_service_is_not_restarted(  # noqa: E501
-        self,
-        patched_nrf_url,
-        patch_push,
-        patch_exists,
-        patch_pull,
-        patch_check_output,
-        patch_restart,
+        self, _, patched_nrf_url, patch_exists, patch_pull, patch_check_output, patch_restart
     ):
         pod_ip = "1.1.1.1"
         patch_check_output.return_value = pod_ip.encode()
@@ -306,12 +326,12 @@ class TestCharm(unittest.TestCase):
     @patch("charm.check_output")
     @patch("ops.model.Container.pull")
     @patch("ops.model.Container.exists")
-    @patch("ops.Container.push")
     @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("ops.Container.push")
     def test_given_config_file_is_written_and_is_changed_when_configure_sdcore_udm_is_called_then_after_writting_config_file_service_is_restarted(  # noqa: E501
         self,
+        _,
         patched_nrf_url,
-        patch_push,
         patch_exists,
         patch_pull,
         patch_check_output,
@@ -330,20 +350,14 @@ class TestCharm(unittest.TestCase):
 
         patch_container_restart.assert_called_with(self.container_name)
 
-    @patch("ops.model.Container.restart")
     @patch("charm.check_output")
     @patch("ops.model.Container.pull")
     @patch("ops.model.Container.exists")
-    @patch("ops.Container.push")
     @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("ops.Container.push")
+    @patch("ops.model.Container.restart")
     def test_given_config_file_is_written_when_configure_sdcore_udm_is_called_then_pebble_plan_is_applied(  # noqa: E501
-        self,
-        patched_nrf_url,
-        patch_push,
-        patch_exists,
-        patch_pull,
-        patch_check_output,
-        patch_container_restart,
+        self, _, __, patched_nrf_url, patch_exists, patch_pull, patch_check_output
     ):
         pod_ip = "1.1.1.1"
         patch_check_output.return_value = pod_ip.encode()
@@ -377,20 +391,14 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(expected_plan, updated_plan)
 
-    @patch("ops.model.Container.restart")
     @patch("charm.check_output")
     @patch("ops.model.Container.pull")
     @patch("ops.model.Container.exists")
-    @patch("ops.Container.push")
     @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("ops.Container.push")
+    @patch("ops.model.Container.restart")
     def test_given_config_file_is_written_when_configure_sdcore_udm_is_called_then_status_is_active(  # noqa: E501
-        self,
-        patched_nrf_url,
-        patch_push,
-        patch_exists,
-        patch_pull,
-        patch_check_output,
-        patch_container_restart,
+        self, _, __, patched_nrf_url, patch_exists, patch_pull, patch_check_output
     ):
         pod_ip = "1.1.1.1"
         patch_check_output.return_value = pod_ip.encode()
@@ -401,7 +409,7 @@ class TestCharm(unittest.TestCase):
         self.harness.charm._storage_is_attached = Mock(return_value=True)
         patch_exists.side_effect = [True, False, True, False]
 
-        self.harness.charm._configure_sdcore_udm(event=Mock())
+        self.harness.container_pebble_ready("udm")
 
         self.assertEqual(self.harness.model.unit.status, ActiveStatus())
 
@@ -411,9 +419,7 @@ class TestCharm(unittest.TestCase):
     @patch("ops.Container.push", new=Mock)
     @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_ip_not_available_when_configure_then_status_is_waiting(
-        self,
-        patched_nrf_url,
-        patch_check_output,
+        self, _, patch_check_output
     ):
         patch_check_output.return_value = "".encode()
         self._create_nrf_relation()

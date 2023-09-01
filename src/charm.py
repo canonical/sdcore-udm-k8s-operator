@@ -66,6 +66,7 @@ class UDMOperatorCharm(CharmBase):
         self.framework.observe(self.on.udm_pebble_ready, self._configure_sdcore_udm)
         self.framework.observe(self.on.fiveg_nrf_relation_joined, self._configure_sdcore_udm)
         self.framework.observe(self._nrf_requires.on.nrf_available, self._configure_sdcore_udm)
+        self.framework.observe(self._nrf_requires.on.nrf_broken, self._on_nrf_broken)
         self.framework.observe(
             self.on.certificates_relation_created, self._on_certificates_relation_created
         )
@@ -130,6 +131,14 @@ class UDMOperatorCharm(CharmBase):
         restart = self._update_config_file()
         self._configure_pebble(restart=restart)
         self.unit.status = ActiveStatus()
+
+    def _on_nrf_broken(self, event: EventBase) -> None:
+        """Event handler for NRF relation broken.
+
+        Args:
+            event (NRFBrokenEvent): Juju event
+        """
+        self.unit.status = BlockedStatus("Waiting for fiveg_nrf relation")
 
     def _on_certificates_relation_created(self, event: EventBase) -> None:
         """Generates Private key."""
