@@ -12,7 +12,13 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from ops import testing
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 
-from charm import BASE_CONFIG_PATH, CONFIG_FILE_NAME, NRF_RELATION_NAME, UDMOperatorCharm
+from charm import (
+    BASE_CONFIG_PATH,
+    CONFIG_FILE_NAME,
+    NRF_RELATION_NAME,
+    TLS_RELATION_NAME,
+    UDMOperatorCharm,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +77,16 @@ class TestCharm(unittest.TestCase):
         )
         self.harness.add_relation_unit(relation_id=relation_id, remote_unit_name="nrf-operator/0")
         return relation_id
+
+    def _create_certificates_relation(self) -> int:
+        """Creates certificates relation.
+
+        Returns:
+            int: relation id.
+        """
+        return self.harness.add_relation(
+            relation_name=TLS_RELATION_NAME, remote_app="tls-certificates-operator"
+        )
 
     def _get_home_network_private_key_as_hexa_string(self) -> str:
         """Returns home network private key as hexadecimal string."""
@@ -138,6 +154,18 @@ class TestCharm(unittest.TestCase):
             BlockedStatus("Waiting for `fiveg_nrf` relation to be created"),
         )
 
+    def test_given_certificates_relation_not_created_when_configure_sdcore_udm_then_status_is_blocked(  # noqa E501
+        self,
+    ):
+        self._create_nrf_relation()
+        self.harness.set_can_connect(container=self.container_name, val=True)
+        self.harness.charm._configure_sdcore_udm(event=Mock())
+
+        self.assertEqual(
+            self.harness.model.unit.status,
+            BlockedStatus("Waiting for `certificates` relation to be created"),
+        )
+
     @patch("charm.check_output")
     @patch("ops.model.Container.pull")
     @patch("ops.model.Container.exists")
@@ -164,11 +192,14 @@ class TestCharm(unittest.TestCase):
             BlockedStatus("Waiting for fiveg_nrf relation"),
         )
 
+    @patch("ops.model.Container.push")
     def test_given_container_can_connect_and_fiveg_nrf_relation_is_created_and_not_available_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
         self,
+        patch_push,
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self._create_nrf_relation()
+        self._create_certificates_relation()
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
@@ -177,14 +208,17 @@ class TestCharm(unittest.TestCase):
             WaitingStatus("Waiting for NRF endpoint to be available"),
         )
 
+    @patch("ops.model.Container.push")
     @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_container_storage_is_not_attached_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
         self,
         patched_nrf_url,
+        patch_push,
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         patched_nrf_url.return_value = VALID_NRF_URL
         self._create_nrf_relation()
+        self._create_certificates_relation()
         self.harness.charm._storage_is_attached = Mock(return_value=False)
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
@@ -193,15 +227,21 @@ class TestCharm(unittest.TestCase):
             self.harness.model.unit.status, WaitingStatus("Waiting for the storage to be attached")
         )
 
+    @patch("ops.model.Container.push")
     @patch("charm.check_output")
     @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_home_network_private_key_not_stored_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
-        self, patched_nrf_url, patch_check_output
+        self,
+        patched_nrf_url,
+        patch_check_output,
+        _,
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         patched_nrf_url.return_value = VALID_NRF_URL
         self._create_nrf_relation()
+        self._create_certificates_relation()
         self.harness.charm._storage_is_attached = Mock(return_value=True)
+        self.harness.charm._certificate_is_stored = Mock(return_value=True)
         pod_ip = "1.1.1.1"
         patch_check_output.return_value = pod_ip.encode()
 
@@ -235,7 +275,8 @@ class TestCharm(unittest.TestCase):
         self.harness.set_can_connect(container=self.container_name, val=True)
         patched_nrf_url.return_value = VALID_NRF_URL
         self._create_nrf_relation()
-        patch_exists.side_effect = [True, True, False, False]
+        self._create_certificates_relation()
+        patch_exists.side_effect = [True, True, True, True, False, False]
         expected_config_file_content = self._read_file(EXPECTED_CONFIG_FILE_PATH)
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
@@ -302,7 +343,7 @@ class TestCharm(unittest.TestCase):
     ):
         pod_ip = "1.1.1.1"
         self.harness.charm._storage_is_attached = Mock(return_value=True)
-        patch_exists.side_effect = [True, False, True, False]
+        patch_exists.side_effect = [True, True, True, False, True, False]
         patch_check_output.return_value = pod_ip.encode()
         patch_pull.side_effect = [
             StringIO("whatever private key"),
@@ -313,6 +354,7 @@ class TestCharm(unittest.TestCase):
         self.harness.set_can_connect(container=self.container_name, val=True)
         patched_nrf_url.return_value = VALID_NRF_URL
         self._create_nrf_relation()
+        self._create_certificates_relation()
         expected_config_file_content = self._read_file(EXPECTED_CONFIG_FILE_PATH)
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
@@ -343,6 +385,7 @@ class TestCharm(unittest.TestCase):
         self.harness.set_can_connect(container=self.container_name, val=True)
         patched_nrf_url.return_value = VALID_NRF_URL
         self._create_nrf_relation()
+        self._create_certificates_relation()
         self.harness.charm._storage_is_attached = Mock(return_value=True)
         patch_exists.return_value = True
 
@@ -365,8 +408,9 @@ class TestCharm(unittest.TestCase):
         self.harness.set_can_connect(container=self.container_name, val=True)
         patched_nrf_url.return_value = VALID_NRF_URL
         self._create_nrf_relation()
+        self._create_certificates_relation()
         self.harness.charm._storage_is_attached = Mock(return_value=True)
-        patch_exists.return_value = [True, False]
+        patch_exists.return_value = [True, True, False]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
         expected_plan = {
@@ -394,11 +438,12 @@ class TestCharm(unittest.TestCase):
     @patch("charm.check_output")
     @patch("ops.model.Container.pull")
     @patch("ops.model.Container.exists")
+    @patch("ops.model.Container.push")
     @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     @patch("ops.Container.push")
     @patch("ops.model.Container.restart")
     def test_given_config_file_is_written_when_configure_sdcore_udm_is_called_then_status_is_active(  # noqa: E501
-        self, _, __, patched_nrf_url, patch_exists, patch_pull, patch_check_output
+        self, _, __, patched_nrf_url, patch_push, patch_exists, patch_pull, patch_check_output
     ):
         pod_ip = "1.1.1.1"
         patch_check_output.return_value = pod_ip.encode()
@@ -406,8 +451,9 @@ class TestCharm(unittest.TestCase):
         self.harness.set_can_connect(container=self.container_name, val=True)
         patched_nrf_url.return_value = VALID_NRF_URL
         self._create_nrf_relation()
+        self._create_certificates_relation()
         self.harness.charm._storage_is_attached = Mock(return_value=True)
-        patch_exists.side_effect = [True, False, True, False]
+        patch_exists.side_effect = [True, True, True, False, True, False]
 
         self.harness.container_pebble_ready("udm")
 
@@ -423,13 +469,40 @@ class TestCharm(unittest.TestCase):
     ):
         patch_check_output.return_value = "".encode()
         self._create_nrf_relation()
+        self._create_certificates_relation()
         self.harness.charm._storage_is_attached = Mock(return_value=True)
+        self.harness.charm._certificate_is_stored = Mock(return_value=True)
 
         self.harness.container_pebble_ready(container_name="udm")
 
         self.assertEqual(
             self.harness.model.unit.status,
             WaitingStatus("Waiting for pod IP address to be available"),
+        )
+
+    @patch("charm.check_output")
+    @patch("ops.model.Container.push")
+    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    def test_given_certificate_is_not_stored_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
+        self,
+        patch_nrf_url,
+        _,
+        patch_check_output,
+    ):
+        self.harness.set_can_connect(container=self.container_name, val=True)
+        patch_nrf_url.return_value = VALID_NRF_URL
+        self._create_nrf_relation()
+        self._create_certificates_relation()
+        self.harness.charm._storage_is_attached = Mock(return_value=True)
+        self.harness.charm._ue_config_file_is_written = Mock(return_value=True)
+        self.harness.charm._home_network_private_key_stored = Mock(return_value=True)
+        self.harness.charm._certificate_is_stored = Mock(return_value=False)
+        patch_check_output.return_value = b"1.1.1.1"
+
+        self.harness.charm._configure_sdcore_udm(event=Mock())
+
+        self.assertEqual(
+            self.harness.model.unit.status, WaitingStatus("Waiting for certificates to be stored")
         )
 
     @patch("charm.generate_private_key")
