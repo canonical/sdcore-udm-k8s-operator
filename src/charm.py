@@ -38,6 +38,7 @@ BASE_CONFIG_PATH = "/etc/udm"
 CONFIG_FILE_NAME = "udmcfg.yaml"
 UDM_SBI_PORT = 29503
 NRF_RELATION_NAME = "fiveg_nrf"
+TLS_RELATION_NAME = "certificates"
 HOME_NETWORK_KEY_NAME = "home_network.key"
 HOME_NETWORK_KEY_PATH = f"/etc/udm/{HOME_NETWORK_KEY_NAME}"
 CERTS_DIR_PATH = "/support/TLS"  # Certificate paths are hardcoded in UDM code
@@ -108,9 +109,12 @@ class UDMOperatorCharm(CharmBase):
         if not self._container.can_connect():
             self.unit.status = WaitingStatus("Waiting for container to be ready")
             return
-        if not self._nrf_relation_is_created():
-            self.unit.status = BlockedStatus("Waiting for `fiveg_nrf` relation to be created")
-            return
+        for relation in [NRF_RELATION_NAME, TLS_RELATION_NAME]:
+            if not self._relation_is_created(relation):
+                self.unit.status = BlockedStatus(
+                    f"Waiting for `{relation}` relation to be created"
+                )
+                return
         if not self._nrf_is_available():
             self.unit.status = WaitingStatus("Waiting for NRF endpoint to be available")
             return
@@ -126,6 +130,10 @@ class UDMOperatorCharm(CharmBase):
             self.unit.status = WaitingStatus(
                 "Waiting for home network private key to be available"
             )
+            event.defer()
+            return
+        if not self._certificate_is_stored():
+            self.unit.status = WaitingStatus("Waiting for certificates to be stored")
             event.defer()
             return
         restart = self._update_config_file()
@@ -155,7 +163,7 @@ class UDMOperatorCharm(CharmBase):
         self._delete_private_key()
         self._delete_csr()
         self._delete_certificate()
-        self._configure_sdcore_udm(event)
+        self.unit.status = BlockedStatus("Waiting for certificates relation")
 
     def _on_certificates_relation_joined(self, event: EventBase) -> None:
         """Generates CSR and requests new certificate."""
@@ -285,13 +293,16 @@ class UDMOperatorCharm(CharmBase):
             return
         self._container.replan()
 
-    def _nrf_relation_is_created(self) -> bool:
-        """Returns whether NRF Juju relation was crated.
+    def _relation_is_created(self, relation_name: str) -> bool:
+        """Returns whether a given Juju relation was created.
+
+        Args:
+            relation_name (str): Relation name.
 
         Returns:
             bool: Whether the NRF relation was created.
         """
-        return bool(self.model.get_relation(NRF_RELATION_NAME))
+        return bool(self.model.get_relation(relation_name))
 
     def _nrf_is_available(self) -> bool:
         """Returns whether the NRF endpoint is available.
@@ -322,7 +333,7 @@ class UDMOperatorCharm(CharmBase):
             nrf_url=self._nrf_requires.nrf_url,
             udm_sbi_port=UDM_SBI_PORT,
             pod_ip=_get_pod_ip(),  # type: ignore[arg-type]
-            scheme="https" if self._certificate_is_stored() else "http",
+            scheme="https",
             _home_network_private_key=self._get_home_network_private_key(),  # type: ignore[arg-type] # noqa: E501
         )
         if not self._config_file_is_written() or not self._config_file_content_matches(
