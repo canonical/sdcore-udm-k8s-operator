@@ -4,6 +4,9 @@ display-name: SD-Core 5G UDM
 summary: A Charmed Operator for SD-Core's UDM component.
 description: |
   A Charmed Operator for SD-Core's Unified Data Manager (UDM) component.
+website: https://charmhub.io/sdcore-udm
+source: https://github.com/canonical/sdcore-udm-operator
+issues: https://github.com/canonical/sdcore-udm-operator/issues
 
 containers:
   udm:
