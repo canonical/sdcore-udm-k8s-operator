@@ -179,6 +179,9 @@ class UDMOperatorCharm(CharmBase):
         if not self._private_key_is_stored():
             event.defer()
             return
+        if self._certificate_is_stored():
+            return
+
         self._request_new_certificate()
 
     def _on_certificate_available(self, event: CertificateAvailableEvent) -> None:
