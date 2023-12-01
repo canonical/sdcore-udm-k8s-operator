@@ -20,10 +20,6 @@ EXPECTED_CONFIG_FILE_PATH = "tests/unit/expected_udmcfg.yaml"
 
 
 class TestCharm(unittest.TestCase):
-    @patch(
-        "charm.KubernetesServicePatch",
-        lambda charm, ports: None,
-    )
     def setUp(self):
         self._mock_home_network_private_key = X25519PrivateKey.generate()
         self.maxDiff = None
