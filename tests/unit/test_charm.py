@@ -156,7 +156,7 @@ class TestCharm(unittest.TestCase):
         )
 
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     @patch("ops.model.Container.restart")
     def test_given_udm_charm_in_active_status_when_nrf_relation_breaks_then_status_is_blocked(
         self, _, patched_nrf_url, patch_check_output
@@ -199,7 +199,7 @@ class TestCharm(unittest.TestCase):
             WaitingStatus("Waiting for NRF endpoint to be available"),
         )
 
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_container_storage_is_not_attached_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
         self,
         patched_nrf_url,
@@ -217,7 +217,7 @@ class TestCharm(unittest.TestCase):
         )
 
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_home_network_private_key_not_stored_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
         self,
         patched_nrf_url,
@@ -240,7 +240,7 @@ class TestCharm(unittest.TestCase):
         )
 
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_config_file_is_not_written_when_configure_sdcore_udm_is_called_then_config_file_is_written_with_expected_content(  # noqa: E501
         self,
         patched_nrf_url,
@@ -269,7 +269,7 @@ class TestCharm(unittest.TestCase):
         )
 
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_config_file_is_written_and_is_not_changed_when_configure_sdcore_udm_is_called_then_config_file_is_not_written(  # noqa: E501
         self, patched_nrf_url, patch_check_output
     ):
@@ -298,7 +298,7 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.model.Container.restart")
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_config_file_is_written_and_is_not_changed_when_configure_sdcore_udm_is_called_then_after_writting_config_file_service_is_not_restarted(  # noqa: E501
         self, patched_nrf_url, patch_check_output, patch_restart
     ):
@@ -324,7 +324,7 @@ class TestCharm(unittest.TestCase):
         patch_restart.assert_not_called()
 
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_config_file_is_written_and_is_changed_when_configure_sdcore_udm_is_called_then_config_file_is_written(  # noqa: E501
         self,
         patched_nrf_url,
@@ -355,7 +355,7 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.model.Container.restart")
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_config_file_is_written_and_is_changed_when_configure_sdcore_udm_is_called_then_after_writting_config_file_service_is_restarted(  # noqa: E501
         self,
         patched_nrf_url,
@@ -382,7 +382,7 @@ class TestCharm(unittest.TestCase):
         patch_container_restart.assert_called_with(self.container_name)
 
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     @patch("ops.model.Container.restart")
     def test_given_config_file_is_written_when_configure_sdcore_udm_is_called_then_pebble_plan_is_applied(  # noqa: E501
         self, _, patched_nrf_url, patch_check_output
@@ -426,7 +426,7 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(expected_plan, updated_plan)
 
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     @patch("ops.Container.push")
     @patch("ops.model.Container.restart")
     def test_given_config_file_is_written_when_configure_sdcore_udm_is_called_then_status_is_active(  # noqa: E501
@@ -452,7 +452,7 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(self.harness.model.unit.status, ActiveStatus())
 
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_ip_not_available_when_configure_then_status_is_waiting(
         self, _, patch_check_output
     ):
@@ -469,7 +469,7 @@ class TestCharm(unittest.TestCase):
         )
 
     @patch("charm.check_output")
-    @patch("charms.sdcore_nrf.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     def test_given_certificate_is_not_stored_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
         self,
         patch_nrf_url,
