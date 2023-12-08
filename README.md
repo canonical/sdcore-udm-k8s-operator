@@ -1,4 +1,4 @@
-# SD-Core UDM Operator for K8s
+# SD-Core UDM Operator (k8s)
 [![CharmHub Badge](https://charmhub.io/sdcore-udm-k8s/badge.svg)](https://charmhub.io/sdcore-udm-k8s)
 
 A Charmed Operator for SD-Core's Unified Data Manager (UDM) component for K8s.
