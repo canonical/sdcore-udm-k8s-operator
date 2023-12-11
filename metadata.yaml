@@ -1,12 +1,12 @@
-name: sdcore-udm
+name: sdcore-udm-k8s
 
-display-name: SD-Core 5G UDM
+display-name: SD-Core 5G UDM K8s
 summary: A Charmed Operator for SD-Core's UDM component.
 description: |
   A Charmed Operator for SD-Core's Unified Data Manager (UDM) component.
-website: https://charmhub.io/sdcore-udm
-source: https://github.com/canonical/sdcore-udm-operator
-issues: https://github.com/canonical/sdcore-udm-operator/issues
+website: https://charmhub.io/sdcore-udm-k8s
+source: https://github.com/canonical/sdcore-udm-k8s-operator
+issues: https://github.com/canonical/sdcore-udm-k8s-operator/issues
 
 containers:
   udm:
