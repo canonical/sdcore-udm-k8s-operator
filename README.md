@@ -25,3 +25,4 @@ juju run sdcore-udm-k8s/leader get-home-network-public-key
 ## Image
 
 **udm**: `ghcr.io/canonical/sdcore-udm:1.3`
+
