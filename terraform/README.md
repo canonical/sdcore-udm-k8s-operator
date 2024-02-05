@@ -39,17 +39,17 @@ Replace the values in the `terraform.tfvars` file:
 ```yaml
 # Mandatory Config Options
 model_name             = "put your model-name here"
-certs_application_name = "put your self-signed-certificates app name here"
-nrf_application_name   = "put your nrf app name here"
+certs_application_name = "put your Self Signed Certificates app name here"
+nrf_application_name   = "put your NRF app name here"
 ```
 
-Run Terraform Plan by providing var-file:
+Create the Terraform Plan:
 
 ```console
 terraform plan -var-file="terraform.tfvars" 
 ```
 
-Deploy the resources, skip the approval:
+Deploy the resources:
 
 ```console
 terraform apply -auto-approve 
@@ -65,7 +65,7 @@ juju status --relations
 
 ### Clean up
 
-Remove the applications:
+Destroy the deployment:
 
 ```console
 terraform destroy -auto-approve
