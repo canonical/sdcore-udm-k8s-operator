@@ -1,3 +1,6 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 variable "model_name" {
   description = "Name of Juju model to deploy application to."
   type        = string
@@ -10,14 +13,8 @@ variable "channel" {
   default     = "1.3/edge"
 }
 
-variable "certs_application_name" {
-  description = "Name of the application providing the `certificates` integration endpoint."
+variable "app_name" {
+  description = "Name of the application in the Juju model."
   type        = string
-  default     = ""
-}
-
-variable "nrf_application_name" {
-  description = "The name of the application providing the `fiveg_nrf` endpoint."
-  type        = string
-  default     = ""
+  default     = "udm"
 }
