@@ -1,5 +1,8 @@
-resource "juju_application" "udm" {
-  name  = "udm"
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+resource "juju_application" "sdcore-udm-k8s" {
+  name  = var.app_name
   model = var.model_name
 
   charm {
@@ -9,33 +12,5 @@ resource "juju_application" "udm" {
 
   units = 1
   trust = true
-}
-
-resource "juju_integration" "udm-certs" {
-  model = var.model_name
-
-  application {
-    name     = juju_application.udm.name
-    endpoint = "certificates"
-  }
-
-  application {
-    name     = var.certs_application_name
-    endpoint = "certificates"
-  }
-}
-
-resource "juju_integration" "udm-nrf" {
-  model = var.model_name
-
-  application {
-    name     = juju_application.udm.name
-    endpoint = "fiveg_nrf"
-  }
-
-  application {
-    name     = var.nrf_application_name
-    endpoint = "fiveg-nrf"
-  }
 }
 
