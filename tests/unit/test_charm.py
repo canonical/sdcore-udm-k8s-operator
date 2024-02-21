@@ -6,7 +6,9 @@ import unittest
 from unittest.mock import Mock, PropertyMock, patch
 
 import yaml
-from charms.tls_certificates_interface.v3.tls_certificates import ProviderCertificate
+from charms.tls_certificates_interface.v3.tls_certificates import (  # type: ignore[import]
+    ProviderCertificate,
+)
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from ops import testing
@@ -212,11 +214,28 @@ class TestCharm(unittest.TestCase):
         )
 
     @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
-    def test_given_container_storage_is_not_attached_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
+    def test_given_config_storage_is_not_attached_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
         self, patched_nrf_url
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self.harness.add_storage(storage_name="certs", attach=True)
+
+        patched_nrf_url.return_value = VALID_NRF_URL
+        self._create_nrf_relation()
+        self._create_certificates_relation()
+
+        self.harness.charm._configure_sdcore_udm(event=Mock())
+
+        self.assertEqual(
+            self.harness.model.unit.status, WaitingStatus("Waiting for the storage to be attached")
+        )
+
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    def test_given_certs_storage_is_not_attached_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
+        self, patched_nrf_url
+    ):
+        self.harness.set_can_connect(container=self.container_name, val=True)
+        self.harness.add_storage(storage_name="config", attach=True)
 
         patched_nrf_url.return_value = VALID_NRF_URL
         self._create_nrf_relation()
@@ -506,6 +525,7 @@ class TestCharm(unittest.TestCase):
     def test_given_ip_not_available_when_configure_then_status_is_waiting(
         self, _, patch_check_output
     ):
+        self.harness.add_storage(storage_name="certs", attach=True)
         self.harness.add_storage(storage_name="config", attach=True)
         patch_check_output.return_value = "".encode()
         self._create_nrf_relation()
