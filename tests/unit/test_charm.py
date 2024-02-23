@@ -607,6 +607,42 @@ class TestCharm(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             (root / "support/TLS/udm.csr").read_text()
 
+    def test_given_cannot_connect_on_certificates_relation_broken_then_certificates_are_not_removed(  # noqa: E501
+        self,
+    ):
+        self.harness.add_storage(storage_name="certs", attach=True)
+        root = self.harness.get_filesystem_root(self.container_name)
+        private_key = "Whatever key content"
+        (root / "support/TLS/udm.key").write_text(private_key)
+        (root / "support/TLS/udm.csr").write_text(STORED_CSR)
+        (root / "support/TLS/udm.pem").write_text(STORED_CERTIFICATE)
+        self.harness.set_can_connect(container=self.container_name, val=False)
+
+        self.harness.charm._on_certificates_relation_broken(event=Mock())
+
+        container_private_key = (root / "support/TLS/udm.key").read_text()
+        container_certificate = (root / "support/TLS/udm.pem").read_text()
+        container_csr = (root / "support/TLS/udm.csr").read_text()
+        self.assertEqual(container_private_key, private_key)
+        self.assertEqual(container_certificate, STORED_CERTIFICATE)
+        self.assertEqual(container_csr, STORED_CSR)
+
+    def test_given_certificates_not_stored_when_on_certificates_relation_broken_then_certificates_dont_exist(  # noqa: E501
+        self,
+    ):
+        self.harness.add_storage(storage_name="certs", attach=True)
+        root = self.harness.get_filesystem_root(self.container_name)
+        self.harness.set_can_connect(container=self.container_name, val=True)
+
+        self.harness.charm._on_certificates_relation_broken(event=Mock)
+
+        with self.assertRaises(FileNotFoundError):
+            (root / "support/TLS/udm.key").read_text()
+        with self.assertRaises(FileNotFoundError):
+            (root / "support/TLS/udm.pem").read_text()
+        with self.assertRaises(FileNotFoundError):
+            (root / "support/TLS/udm.csr").read_text()
+
     @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     @patch("charm.generate_csr")
     @patch("charm.check_output")
@@ -783,6 +819,25 @@ class TestCharm(unittest.TestCase):
         patch_request_certificate_creation.assert_called_with(
             certificate_signing_request=STORED_CSR.encode()
         )
+
+    @patch(f"{CERTIFICATES_LIB}.request_certificate_creation")
+    @patch("charm.generate_csr")
+    def test_given_cannot_connect_when_certificate_expiring_then_certificate_is_not_requested(
+        self, patch_generate_csr, patch_request_certificate_creation
+    ):
+        self.harness.add_storage(storage_name="certs", attach=True)
+        root = self.harness.get_filesystem_root(self.container_name)
+        private_key = "private key content"
+        (root / "support/TLS/udm.key").write_text(private_key)
+        (root / "support/TLS/udm.pem").write_text(STORED_CERTIFICATE)
+        event = Mock()
+        event.certificate = STORED_CERTIFICATE
+        patch_generate_csr.return_value = STORED_CSR.encode()
+        self.harness.set_can_connect(container=self.container_name, val=False)
+
+        self.harness.charm._on_certificate_expiring(event=event)
+
+        patch_request_certificate_creation.assert_not_called()
 
     def test_given_cant_connect_to_workload_when_get_home_network_public_key_action_then_event_fails(  # noqa: E501
         self,
