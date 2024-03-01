@@ -79,9 +79,6 @@ async def build_and_deploy(ops_test: OpsTest):
     await deploy_tls
     await deploy_grafana_agent
     await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=TLS_PROVIDER_APP_NAME)
-    await ops_test.model.integrate(
-        relation1=f"{APPLICATION_NAME}:logging", relation2=GRAFANA_AGENT_APP_NAME
-    )
     resources = {
         "udm-image": METADATA["resources"]["udm-image"]["upstream-source"],
     }
@@ -112,6 +109,9 @@ async def test_relate_and_wait_for_active_status(ops_test: OpsTest, build_and_de
         relation1=f"{APPLICATION_NAME}:fiveg_nrf", relation2=NRF_APP_NAME
     )
     await ops_test.model.integrate(relation1=APPLICATION_NAME, relation2=TLS_PROVIDER_APP_NAME)
+    await ops_test.model.integrate(
+        relation1=f"{APPLICATION_NAME}:logging", relation2=GRAFANA_AGENT_APP_NAME
+    )
     await ops_test.model.wait_for_idle(
         apps=[APPLICATION_NAME],
         status="active",
