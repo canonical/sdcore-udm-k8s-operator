@@ -17,3 +17,8 @@ output "fiveg_nrf_endpoint" {
   description = "Name of the endpoint to provide fiveg_nrf interface."
   value       = "fiveg_nrf"
 }
+
+output "logging_endpoint" {
+  description = "Name of the endpoint used to integrate with the Logging provider."
+  value       = "logging"
+}

@@ -9,6 +9,7 @@ from ipaddress import IPv4Address
 from subprocess import check_output
 from typing import Optional
 
+from charms.loki_k8s.v1.loki_push_api import LogForwarder  # type: ignore[import]
 from charms.sdcore_nrf_k8s.v0.fiveg_nrf import NRFRequires  # type: ignore[import]
 from charms.tls_certificates_interface.v3.tls_certificates import (  # type: ignore[import]
     CertificateExpiringEvent,
@@ -41,6 +42,7 @@ PRIVATE_KEY_NAME = "udm.key"
 CSR_NAME = "udm.csr"
 CERTIFICATE_NAME = "udm.pem"
 CERTIFICATE_COMMON_NAME = "udm.sdcore"
+LOGGING_RELATION_NAME = "logging"
 
 
 class UDMOperatorCharm(CharmBase):
@@ -61,7 +63,7 @@ class UDMOperatorCharm(CharmBase):
         self._nrf_requires = NRFRequires(charm=self, relation_name=NRF_RELATION_NAME)
         self.unit.set_ports(UDM_SBI_PORT)
         self._certificates = TLSCertificatesRequiresV3(self, "certificates")
-
+        self._logging = LogForwarder(charm=self, relation_name=LOGGING_RELATION_NAME)
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.update_status, self._configure_sdcore_udm)
         self.framework.observe(self.on.udm_pebble_ready, self._configure_sdcore_udm)
