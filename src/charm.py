@@ -20,14 +20,7 @@ from charms.tls_certificates_interface.v3.tls_certificates import (  # type: ign
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from jinja2 import Environment, FileSystemLoader
-from ops import (
-    ActiveStatus,
-    BlockedStatus,
-    CollectStatusEvent,
-    InstallEvent,
-    ModelError,
-    WaitingStatus,
-)
+from ops import ActiveStatus, BlockedStatus, CollectStatusEvent, ModelError, WaitingStatus
 from ops.charm import ActionEvent, CharmBase
 from ops.framework import EventBase
 from ops.main import main
@@ -71,7 +64,6 @@ class UDMOperatorCharm(CharmBase):
         self.unit.set_ports(UDM_SBI_PORT)
         self._certificates = TLSCertificatesRequiresV3(self, "certificates")
         self._logging = LogForwarder(charm=self, relation_name=LOGGING_RELATION_NAME)
-        self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.update_status, self._configure_sdcore_udm)
         self.framework.observe(self.on.udm_pebble_ready, self._configure_sdcore_udm)
         self.framework.observe(self.on.fiveg_nrf_relation_joined, self._configure_sdcore_udm)
@@ -90,16 +82,6 @@ class UDMOperatorCharm(CharmBase):
             self.on.get_home_network_public_key_action,
             self._on_get_home_network_public_key_action,
         )
-
-    def _on_install(self, event: InstallEvent) -> None:
-        """Handles the install event.
-
-        Args:
-            event (EventBase): Juju event.
-        """
-        if not self._container.can_connect():
-            return
-        self._generate_home_network_private_key()
 
     def _on_collect_unit_status(self, event: CollectStatusEvent):  # noqa C901
         """Check the unit status and set to Unit when CollectStatusEvent is fired.
@@ -184,6 +166,9 @@ class UDMOperatorCharm(CharmBase):
             logger.info("The preconditions for the configuration are not met yet.")
             return
 
+        if not self._home_network_private_key_stored():
+            self._generate_home_network_private_key()
+
         if not self._private_key_is_stored():
             self._generate_private_key()
 
@@ -226,9 +211,6 @@ class UDMOperatorCharm(CharmBase):
             return False
 
         if not _get_pod_ip():
-            return False
-
-        if not self._home_network_private_key_stored():
             return False
 
         return True
@@ -446,8 +428,8 @@ class UDMOperatorCharm(CharmBase):
             path=CERTS_DIR_PATH
         )
 
+    @staticmethod
     def _render_config_file(
-        self,
         *,
         nrf_url: str,
         udm_sbi_port: int,

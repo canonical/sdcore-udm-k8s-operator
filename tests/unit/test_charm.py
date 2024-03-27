@@ -109,30 +109,6 @@ class TestCharm(unittest.TestCase):
         )
         return public_bytes.hex()
 
-    def test_given_cant_connect_to_container_when_on_install_then_status_is_waiting(self):
-        self.harness.set_can_connect(container=self.container_name, val=False)
-
-        self.harness.charm._on_install(event=Mock())
-        self.harness.evaluate_status()
-        self.assertEqual(
-            self.harness.model.unit.status, WaitingStatus("Waiting for container to be ready")
-        )
-
-    @patch("cryptography.hazmat.primitives.asymmetric.x25519.X25519PrivateKey.generate")
-    def test_given_can_connect_when_on_install_then_home_network_key_is_generated_and_pushed_to_container(  # noqa: E501
-        self,
-        patch_generate,
-    ):
-        self.harness.add_storage("config", attach=True)
-        root = self.harness.get_filesystem_root(self.container_name)
-        patch_generate.return_value = self._mock_home_network_private_key
-
-        self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.charm._on_install(event=Mock())
-        home_network_private_key = self._get_home_network_private_key_as_hexa_string()
-
-        self.assertEqual((root / "etc/udm/home_network.key").read_text(), home_network_private_key)
-
     def test_given_container_cant_connect_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
         self,
     ):
@@ -249,23 +225,45 @@ class TestCharm(unittest.TestCase):
 
     @patch("charm.check_output")
     @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
-    def test_given_home_network_private_key_not_stored_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
+    @patch("cryptography.hazmat.primitives.asymmetric.x25519.X25519PrivateKey.generate")
+    def test_given_home_network_private_key_not_stored_when_configure_sdcore_udm_then_home_network_private_key_is_generated(  # noqa: E501
+        self, patch_generate, patched_nrf_url, patch_check_output
+    ):
+        self.harness.add_storage(storage_name="certs", attach=True)
+        self.harness.add_storage(storage_name="config", attach=True)
+        self.harness.set_can_connect(container=self.container_name, val=True)
+        patched_nrf_url.return_value = VALID_NRF_URL
+        patch_generate.return_value = self._mock_home_network_private_key
+        home_network_private_key = self._get_home_network_private_key_as_hexa_string()
+        root = self.harness.get_filesystem_root(self.container_name)
+        patch_check_output.return_value = POD_IP
+        self._create_nrf_relation()
+        self._create_certificates_relation()
+
+        self.harness.charm._configure_sdcore_udm(event=Mock())
+
+        self.assertEqual((root / "etc/udm/home_network.key").read_text(), home_network_private_key)
+
+    @patch("charm.check_output")
+    @patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
+    def test_given_home_network_private_key_stored_when_configure_sdcore_udm_then_home_network_private_key_is_not_generated(  # noqa: E501
         self, patched_nrf_url, patch_check_output
     ):
         self.harness.add_storage(storage_name="certs", attach=True)
         self.harness.add_storage(storage_name="config", attach=True)
         self.harness.set_can_connect(container=self.container_name, val=True)
         patched_nrf_url.return_value = VALID_NRF_URL
-        self._create_nrf_relation()
-
+        root = self.harness.get_filesystem_root(self.container_name)
+        (root / "etc/udm/home_network.key").write_text("whatever private key")
+        config_modification_time = (root / "etc/udm/home_network.key").stat().st_mtime
         patch_check_output.return_value = POD_IP
+        self._create_nrf_relation()
         self._create_certificates_relation()
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
-        self.harness.evaluate_status()
+
         self.assertEqual(
-            self.harness.model.unit.status,
-            WaitingStatus("Waiting for home network private key to be available"),
+            (root / "etc/udm/home_network.key").stat().st_mtime, config_modification_time
         )
 
     @patch(f"{CERTIFICATES_LIB}.get_assigned_certificates")
