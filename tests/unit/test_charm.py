@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import Mock, PropertyMock, patch
 
 import yaml
+from charm import CONFIG_FILE_NAME, NRF_RELATION_NAME, TLS_RELATION_NAME, UDMOperatorCharm
 from charms.tls_certificates_interface.v3.tls_certificates import (  # type: ignore[import]
     ProviderCertificate,
 )
@@ -13,8 +14,6 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from ops import testing
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
-
-from charm import CONFIG_FILE_NAME, NRF_RELATION_NAME, TLS_RELATION_NAME, UDMOperatorCharm
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ class TestCharm(unittest.TestCase):
 
     @staticmethod
     def _get_metadata() -> dict:
-        """Reads `metadata.yaml` and returns it as a dictionary.
+        """Read `metadata.yaml` and returns it as a dictionary.
 
         Returns:
             dics: metadata.yaml as a dictionary.
@@ -54,7 +53,7 @@ class TestCharm(unittest.TestCase):
 
     @staticmethod
     def _read_file(path: str) -> str:
-        """Reads a file and returns as a string.
+        """Read a file and returns as a string.
 
         Args:
             path (str): path to the file.
@@ -67,7 +66,7 @@ class TestCharm(unittest.TestCase):
         return content
 
     def _create_nrf_relation(self) -> int:
-        """Creates NRF relation.
+        """Create NRF relation.
 
         Returns:
             int: relation id.
@@ -79,7 +78,7 @@ class TestCharm(unittest.TestCase):
         return relation_id
 
     def _create_certificates_relation(self) -> int:
-        """Creates certificates relation.
+        """Create certificates relation.
 
         Returns:
             int: relation id.
@@ -93,7 +92,7 @@ class TestCharm(unittest.TestCase):
         return relation_id
 
     def _get_home_network_private_key_as_hexa_string(self) -> str:
-        """Returns home network private key as hexadecimal string."""
+        """Return home network private key as hexadecimal string."""
         private_bytes = self._mock_home_network_private_key.private_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PrivateFormat.Raw,
@@ -102,7 +101,7 @@ class TestCharm(unittest.TestCase):
         return private_bytes.hex()
 
     def _get_home_network_public_key_as_hexa_string(self) -> str:
-        """Returns home network public key as hexadecimal string."""
+        """Return home network public key as hexadecimal string."""
         public_key = self._mock_home_network_private_key.public_key()
         public_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
