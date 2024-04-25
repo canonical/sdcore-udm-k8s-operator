@@ -38,16 +38,20 @@ async def _deploy_database(ops_test: OpsTest):
     )
 
 
-async def _deploy_nrf(ops_test: OpsTest):
+async def _deploy_and_integrate_nrf_and_mongodb(ops_test: OpsTest):
     assert ops_test.model
     await _deploy_database(ops_test)
+    await _deploy_nrf(ops_test)
+    await ops_test.model.integrate(relation1=DATABASE_APP_NAME, relation2=NRF_APP_NAME)
+
+
+async def _deploy_nrf(ops_test: OpsTest):
+    assert ops_test.model
     await ops_test.model.deploy(
         NRF_APP_NAME,
         application_name=NRF_APP_NAME,
         channel=NRF_APP_CHANNEL,
-        trust=True,
     )
-    await ops_test.model.integrate(relation1=DATABASE_APP_NAME, relation2=NRF_APP_NAME)
 
 
 async def _deploy_grafana_agent(ops_test: OpsTest):
@@ -75,7 +79,7 @@ async def _deploy_tls_provider(ops_test: OpsTest):
 async def build_and_deploy(ops_test: OpsTest):
     """Build the charm-under-test and deploy it."""
     assert ops_test.model
-    deploy_nrf = asyncio.create_task(_deploy_nrf(ops_test))
+    deploy_nrf = asyncio.create_task(_deploy_and_integrate_nrf_and_mongodb(ops_test))
     deploy_tls = asyncio.create_task(_deploy_tls_provider(ops_test))
     deploy_grafana_agent = asyncio.create_task(_deploy_grafana_agent(ops_test))
     charm = await ops_test.build_charm(".")
