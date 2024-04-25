@@ -7,9 +7,9 @@ A Charmed Operator for SD-Core's Unified Data Manager (UDM) component for K8s.
 
 ```bash
 juju deploy mongodb-k8s --channel 6/beta --trust
-juju deploy sdcore-nrf-k8s --channel edge
-juju deploy sdcore-udm-k8s --channel edge
-juju deploy self-signed-certificates --channel=beta
+juju deploy sdcore-nrf-k8s --channel=1.4/edge
+juju deploy sdcore-udm-k8s --channel=1.4/edge
+juju deploy self-signed-certificates
 
 juju integrate sdcore-nrf-k8s mongodb-k8s
 juju integrate sdcore-nrf-k8s:certificates self-signed-certificates:certificates
