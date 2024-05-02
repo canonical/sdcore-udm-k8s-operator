@@ -1,3 +1,51 @@
+name: sdcore-udm-k8s
+
+summary: A Charmed Operator for SD-Core's UDM component.
+description: |
+  A Charmed Operator for SD-Core's Unified Data Manager (UDM) component.
+links:
+  website:
+    - https://charmhub.io/sdcore-udm-k8s
+  source:
+    - https://github.com/canonical/sdcore-udm-k8s-operator
+  issues:
+    - https://github.com/canonical/sdcore-udm-k8s-operator/issues
+
+containers:
+  udm:
+    resource: udm-image
+    mounts:
+      - storage: config
+        location: /etc/udm/
+      - storage: certs
+        location: /support/TLS
+
+resources:
+  udm-image:
+    type: oci-image
+    description: OCI image for SD-Core's UDM
+    upstream-source: ghcr.io/canonical/sdcore-udm:1.4.0
+
+storage:
+  config:
+    type: filesystem
+    minimum-size: 1M
+  certs:
+    type: filesystem
+    minimum-size: 1M
+
+requires:
+  fiveg_nrf:
+    interface: fiveg_nrf
+  certificates:
+    interface: tls-certificates
+  logging:
+      interface: loki_push_api
+
+assumes:
+  - k8s-api
+  - juju >= 3.4
+
 type: charm
 bases:
   - build-on:
@@ -15,3 +63,7 @@ parts:
       - libssl-dev
       - pkg-config
       - rustc
+
+actions:
+  get-home-network-public-key:
+    description: Returns the public key for Home Network.
