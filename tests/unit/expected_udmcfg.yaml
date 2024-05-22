@@ -1,6 +1,6 @@
 configuration:
   keys:
-    udmProfileAHNPrivateKey: whatever private key
+    udmProfileAHNPrivateKey: whatever home network key
   nrfUri: https://nrf:443
   sbi:
     bindingIPv4: 0.0.0.0
