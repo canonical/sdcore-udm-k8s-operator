@@ -17,54 +17,61 @@ from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 
 logger = logging.getLogger(__name__)
 
+CERTIFICATE = "whatever certificate content"
 CERTIFICATES_LIB = (
     "charms.tls_certificates_interface.v3.tls_certificates.TLSCertificatesRequiresV3"
 )
-CERTIFICATE = "whatever certificate content"
 CERTIFICATE_PATH = "support/TLS/udm.pem"
 CSR = "Whatever CSR content"
 CSR_PATH = "support/TLS/udm.csr"
 EXPECTED_CONFIG_FILE_PATH = "tests/unit/expected_udmcfg.yaml"
+HOME_NETWORK_KEY = "whatever home network key"
 HOME_NETWORK_KEY_PATH = "etc/udm/home_network.key"
 NAMESPACE = "whatever"
 POD_IP = b"1.1.1.1"
 PRIVATE_KEY = "whatever private key"
+PRIVATE_KEY_PATH = "support/TLS/udm.key"
 VALID_NRF_URL = "https://nrf:443"
 
 
 class TestCharm():
 
-    patcher_nrf_url = patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)
     patcher_check_output = patch("charm.check_output")
-    patcher_generate = patch("cryptography.hazmat.primitives.asymmetric.x25519.X25519PrivateKey.generate")
-    patcher_get_assigned_certs = patch(f"{CERTIFICATES_LIB}.get_assigned_certificates")
     patcher_container_restart = patch("ops.model.Container.restart")
-    patcher_request_certificate_creation = patch(f"{CERTIFICATES_LIB}.request_certificate_creation")
+    patcher_cryptography_generate = patch("cryptography.hazmat.primitives.asymmetric.x25519.X25519PrivateKey.generate")   # noqa E501
     patcher_generate_csr = patch("charm.generate_csr")
     patcher_generate_private_key = patch("charm.generate_private_key")
-    
+    patcher_get_assigned_certs = patch(f"{CERTIFICATES_LIB}.get_assigned_certificates")
+    patcher_nrf_url = patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)   # noqa E501
+    patcher_request_cert_creation = patch(f"{CERTIFICATES_LIB}.request_certificate_creation")
+
     @pytest.fixture()
     def setUp(self):
-        self.mock_nrf_url = TestCharm.patcher_nrf_url.start()
         self.mock_check_output = TestCharm.patcher_check_output.start()
-        self.mock_get_assigned_certs = TestCharm.patcher_get_assigned_certs.start()
         self.mock_container_restart = TestCharm.patcher_container_restart.start()
-        self.mock_request_certificate_creation = TestCharm.patcher_request_certificate_creation.start()
         self.mock_generate_csr = TestCharm.patcher_generate_csr.start()
         self.mock_generate_private_key = TestCharm.patcher_generate_private_key.start()
-        self._mock_home_network_private_key = X25519PrivateKey.generate()
-        self.metadata = self._get_metadata()
-        self.container_name = list(self.metadata["containers"].keys())[0]
+        self.mock_get_assigned_certs = TestCharm.patcher_get_assigned_certs.start()
+        self.mock_nrf_url = TestCharm.patcher_nrf_url.start()
+        self.mock_request_certificate_creation = TestCharm.patcher_request_cert_creation.start()
+        self.mock_home_network_private_key = X25519PrivateKey.generate()
+        self.mock_cryptography_generate = TestCharm.patcher_cryptography_generate.start()
+        self.mock_cryptography_generate.return_value = self.mock_home_network_private_key
+        metadata = self._get_metadata()
+        self.container_name = list(metadata["containers"].keys())[0]
 
     def tearDown(self) -> None:
         patch.stopall()
 
-    @pytest.fixture(autouse=True)
-    def harness(self, setUp, request):
+    @pytest.fixture()
+    def mock_default_values(self):
         self.mock_nrf_url.return_value = VALID_NRF_URL
         self.mock_check_output.return_value = POD_IP
         self.mock_generate_private_key.return_value = PRIVATE_KEY.encode()
         self.mock_generate_csr.return_value = CSR.encode()
+
+    @pytest.fixture(autouse=True)
+    def harness(self, setUp, request, mock_default_values):
         self.harness = testing.Harness(UDMOperatorCharm)
         self.harness.set_model_name(name=NAMESPACE)
         self.harness.set_leader(is_leader=True)
@@ -72,6 +79,11 @@ class TestCharm():
         yield self.harness
         self.harness.cleanup()
         request.addfinalizer(self.tearDown)
+
+    @pytest.fixture()
+    def add_storage(self):
+        self.harness.add_storage(storage_name="certs", attach=True)
+        self.harness.add_storage(storage_name="config", attach=True)
 
     @staticmethod
     def _get_metadata() -> dict:
@@ -87,10 +99,15 @@ class TestCharm():
             content = f.read()
         return content
 
+    @staticmethod
+    def _get_provider_certificate():
+        provider_certificate = Mock(ProviderCertificate)
+        provider_certificate.certificate = CERTIFICATE
+        provider_certificate.csr = CSR
+        return provider_certificate
+
     def _create_nrf_relation(self) -> int:
-        """Returns:
-        int: relation id.
-        """
+        """Create NRF relation and return its relation id."""
         relation_id = self.harness.add_relation(
             relation_name=NRF_RELATION_NAME, remote_app="nrf-operator"
         )
@@ -98,9 +115,7 @@ class TestCharm():
         return relation_id
 
     def _create_certificates_relation(self) -> int:
-        """Returns:
-        int: relation id.
-        """
+        """Create certificates relation and return its relation id."""
         relation_id = self.harness.add_relation(
             relation_name=TLS_RELATION_NAME, remote_app="tls-certificates-operator"
         )
@@ -109,8 +124,15 @@ class TestCharm():
         )
         return relation_id
 
+    def _write_keys_csr_and_certificate_files(self) -> None:
+        root = self.harness.get_filesystem_root(self.container_name)
+        (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
+        (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
+        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
+        (root / CSR_PATH).write_text(CSR)
+
     def _get_home_network_private_key_as_hexadecimal_string(self) -> str:
-        private_bytes = self._mock_home_network_private_key.private_bytes(
+        private_bytes = self.mock_home_network_private_key.private_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PrivateFormat.Raw,
             encryption_algorithm=serialization.NoEncryption(),
@@ -118,7 +140,7 @@ class TestCharm():
         return private_bytes.hex()
 
     def _get_home_network_public_key_as_hexadecimal_string(self) -> str:
-        public_key = self._mock_home_network_private_key.public_key()
+        public_key = self.mock_home_network_private_key.public_key()
         public_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
         )
@@ -153,16 +175,12 @@ class TestCharm():
 
         assert self.harness.model.unit.status == BlockedStatus("Waiting for certificates relation")
 
+
     def test_given_udm_charm_in_active_status_when_nrf_relation_breaks_then_status_is_blocked(
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
+        self._write_keys_csr_and_certificate_files()
         root = self.harness.get_filesystem_root(self.container_name)
-        home_network_private_key = self._get_home_network_private_key_as_hexadecimal_string()
-        (root / HOME_NETWORK_KEY_PATH).write_text(home_network_private_key)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
-        (root / CSR_PATH).write_text(CSR)
         (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text("super different config file content")
         self._create_certificates_relation()
         nrf_relation_id = self._create_nrf_relation()
@@ -174,10 +192,8 @@ class TestCharm():
         assert self.harness.model.unit.status == BlockedStatus("Waiting for fiveg_nrf relation")
 
     def test_given_container_can_connect_and_fiveg_nrf_relation_is_created_and_not_available_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         self.harness.set_can_connect(container=self.container_name, val=True)
         self.mock_nrf_url.return_value = None
         self._create_nrf_relation()
@@ -185,8 +201,10 @@ class TestCharm():
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
-        
-        assert self.harness.model.unit.status == WaitingStatus("Waiting for NRF endpoint to be available")
+
+        assert self.harness.model.unit.status == WaitingStatus(
+                                                    "Waiting for NRF endpoint to be available"
+                                                )
 
     @pytest.mark.parametrize(
         "storage_name",
@@ -206,18 +224,16 @@ class TestCharm():
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status ==  WaitingStatus("Waiting for the storage to be attached")
+        assert self.harness.model.unit.status ==  WaitingStatus(
+                                                    "Waiting for the storage to be attached"
+                                                )
 
     def test_given_home_network_private_key_not_stored_when_configure_sdcore_udm_then_home_network_private_key_is_generated(  # noqa: E501
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         self.harness.set_can_connect(container=self.container_name, val=True)
         self.mock_generate_private_key.return_value = PRIVATE_KEY.encode()
         self.mock_generate_csr.return_value = CSR.encode()
-        mock_generate = TestCharm.patcher_generate.start()
-        mock_generate.return_value = self._mock_home_network_private_key
         home_network_private_key = self._get_home_network_private_key_as_hexadecimal_string()
         root = self.harness.get_filesystem_root(self.container_name)
         self._create_nrf_relation()
@@ -226,15 +242,13 @@ class TestCharm():
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
         assert (root / HOME_NETWORK_KEY_PATH).read_text() == home_network_private_key
-    
+
     def test_given_home_network_private_key_stored_when_configure_sdcore_udm_then_home_network_private_key_is_not_generated(  # noqa: E501
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         self.harness.set_can_connect(container=self.container_name, val=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        (root / HOME_NETWORK_KEY_PATH).write_text(PRIVATE_KEY)
+        (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
         config_modification_time = (root / HOME_NETWORK_KEY_PATH).stat().st_mtime
         self._create_nrf_relation()
         self._create_certificates_relation()
@@ -242,141 +256,98 @@ class TestCharm():
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
         assert (root / HOME_NETWORK_KEY_PATH).stat().st_mtime == config_modification_time
-   
+
     def test_given_config_file_is_not_written_when_configure_sdcore_udm_is_called_then_config_file_is_written_with_expected_content(  # noqa: E501
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
-        root = self.harness.get_filesystem_root(self.container_name)
-        (root / CSR_PATH).write_text(CSR)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
-        (root / HOME_NETWORK_KEY_PATH).write_text(PRIVATE_KEY)
+        self._write_keys_csr_and_certificate_files()
         self._create_nrf_relation()
         self._create_certificates_relation()
-        expected_config_file_content = self._read_file(EXPECTED_CONFIG_FILE_PATH)
-        provider_certificate = Mock(ProviderCertificate)
-        provider_certificate.certificate = CERTIFICATE
-        provider_certificate.csr = CSR
-        self.mock_get_assigned_certs.return_value = [provider_certificate]
+        expected_config_file_content = self._read_file(EXPECTED_CONFIG_FILE_PATH).strip()
+        self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
-        assert (root / f"etc/udm/{CONFIG_FILE_NAME}").read_text() == expected_config_file_content.strip()
-   
+        root = self.harness.get_filesystem_root(self.container_name)
+        assert (root / f"etc/udm/{CONFIG_FILE_NAME}").read_text() == expected_config_file_content
+
     def test_given_config_file_is_written_and_is_not_changed_when_configure_sdcore_udm_is_called_then_config_file_is_not_written(  # noqa: E501
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
+        self._write_keys_csr_and_certificate_files()
         root = self.harness.get_filesystem_root(self.container_name)
-        (root / CSR_PATH).write_text(CSR)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
-        (root / HOME_NETWORK_KEY_PATH).write_text(PRIVATE_KEY)
         (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text(
             self._read_file(EXPECTED_CONFIG_FILE_PATH)
         )
         config_modification_time = (root / f"etc/udm/{CONFIG_FILE_NAME}").stat().st_mtime
         self._create_nrf_relation()
         self._create_certificates_relation()
-        provider_certificate = Mock(ProviderCertificate)
-        provider_certificate.certificate = CERTIFICATE
-        provider_certificate.csr = CSR
-        self.mock_get_assigned_certs.return_value = [provider_certificate]
+        self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
         assert (root / f"etc/udm/{CONFIG_FILE_NAME}").stat().st_mtime == config_modification_time
 
     def test_given_config_file_is_written_and_is_not_changed_when_configure_sdcore_udm_is_called_then_after_writting_config_file_service_is_not_restarted(  # noqa: E501
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
+        self._write_keys_csr_and_certificate_files()
         root = self.harness.get_filesystem_root(self.container_name)
-        (root / CSR_PATH).write_text(CSR)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
-        (root / HOME_NETWORK_KEY_PATH).write_text(PRIVATE_KEY)
         (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text(
             self._read_file(EXPECTED_CONFIG_FILE_PATH)
         )
         self._create_nrf_relation()
         self._create_certificates_relation()
-        provider_certificate = Mock(ProviderCertificate)
-        provider_certificate.certificate = CERTIFICATE
-        provider_certificate.csr = CSR
-        self.mock_get_assigned_certs.return_value = [provider_certificate]
+        self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
         self.mock_container_restart.assert_not_called()
 
     def test_given_config_file_is_written_and_is_changed_when_configure_sdcore_udm_is_called_then_config_file_is_written(  # noqa: E501
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
+        self._write_keys_csr_and_certificate_files()
         root = self.harness.get_filesystem_root(self.container_name)
-        home_network_private_key = "whatever private key"
-        (root / CSR_PATH).write_text(CSR)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
-        (root / HOME_NETWORK_KEY_PATH).write_text(home_network_private_key)
         (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text("super different config file content")
         self._create_nrf_relation()
         self._create_certificates_relation()
-        expected_config_file_content = self._read_file(EXPECTED_CONFIG_FILE_PATH)
-        provider_certificate = Mock(ProviderCertificate)
-        provider_certificate.certificate = CERTIFICATE
-        provider_certificate.csr = CSR
-        self.mock_get_assigned_certs.return_value = [provider_certificate]
+        expected_config_file_content = self._read_file(EXPECTED_CONFIG_FILE_PATH).strip()
+        self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
-        assert (root / f"etc/udm/{CONFIG_FILE_NAME}").read_text() == expected_config_file_content.strip()
+        assert (root / f"etc/udm/{CONFIG_FILE_NAME}").read_text() == expected_config_file_content
 
     def test_given_config_file_is_written_and_is_changed_when_configure_sdcore_udm_is_called_then_after_writting_config_file_service_is_restarted(  # noqa: E501
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
+        self._write_keys_csr_and_certificate_files()
         root = self.harness.get_filesystem_root(self.container_name)
-        (root / CSR_PATH).write_text(CSR)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
-        (root / HOME_NETWORK_KEY_PATH).write_text(PRIVATE_KEY)
         (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text("super different config file content")
         self._create_nrf_relation()
         self._create_certificates_relation()
-        provider_certificate = Mock(ProviderCertificate)
-        provider_certificate.certificate = CERTIFICATE
-        provider_certificate.csr = CSR
-        self.mock_get_assigned_certs.return_value  = [provider_certificate]
+        self.mock_get_assigned_certs.return_value  = [self._get_provider_certificate()]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
         self.mock_container_restart.assert_called_with(self.container_name)
 
     def test_given_config_file_is_written_when_configure_sdcore_udm_is_called_then_pebble_plan_is_applied(  # noqa: E501
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
+        self._write_keys_csr_and_certificate_files()
         root = self.harness.get_filesystem_root(self.container_name)
-        (root / CSR_PATH).write_text(CSR)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
-        (root / HOME_NETWORK_KEY_PATH).write_text(PRIVATE_KEY)
         (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text("super different config file content")
         self._create_nrf_relation()
         self._create_certificates_relation()
-        provider_certificate = Mock(ProviderCertificate)
-        provider_certificate.certificate = CERTIFICATE
-        provider_certificate.csr = CSR
-        self.mock_get_assigned_certs.return_value = [provider_certificate]
+        self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
@@ -401,20 +372,13 @@ class TestCharm():
         assert expected_plan == updated_plan
 
     def test_given_config_file_written_when_configure_sdcore_udm_is_called_then_status_is_active(
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
+        self._write_keys_csr_and_certificate_files()
         root = self.harness.get_filesystem_root(self.container_name)
-        provider_certificate = Mock(ProviderCertificate)
-        provider_certificate.certificate = CERTIFICATE
-        provider_certificate.csr = CSR
-        self.mock_get_assigned_certs.return_value = [provider_certificate]
-        (root / CSR_PATH).write_text(CSR)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
-        (root / HOME_NETWORK_KEY_PATH).write_text(PRIVATE_KEY)
         (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text("super different config file content")
+        self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
         self._create_nrf_relation()
         self._create_certificates_relation()
 
@@ -423,9 +387,7 @@ class TestCharm():
 
         assert self.harness.model.unit.status == ActiveStatus()
 
-    def test_given_ip_not_available_when_configure_then_status_is_waiting(self):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
+    def test_given_ip_not_available_when_configure_then_status_is_waiting(self, add_storage):
         self.mock_check_output.return_value = "".encode()
         self._create_nrf_relation()
         self._create_certificates_relation()
@@ -433,70 +395,65 @@ class TestCharm():
         self.harness.container_pebble_ready(container_name=self.container_name)
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus("Waiting for pod IP address to be available")
+        assert self.harness.model.unit.status == WaitingStatus(
+                                                    "Waiting for pod IP address to be available"
+                                                )
 
-    def test_given_certificate_not_stored_when_configure_sdcore_udm_then_status_is_waiting(self):
+    def test_given_certificate_not_stored_when_configure_sdcore_udm_then_status_is_waiting(
+        self, add_storage
+    ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        (root / HOME_NETWORK_KEY_PATH).write_text(PRIVATE_KEY)
+        (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
         self._create_nrf_relation()
         self._create_certificates_relation()
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus("Waiting for certificates to be stored")
+        assert self.harness.model.unit.status == WaitingStatus(
+                                                    "Waiting for certificates to be stored"
+                                                )
 
     def test_given_can_connect_when_on_certificates_relation_created_then_private_key_is_generated(
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="config", attach=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        home_network_private_key = self._get_home_network_private_key_as_hexadecimal_string()
-        (root / HOME_NETWORK_KEY_PATH).write_text(home_network_private_key)
+        (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
         self.mock_generate_private_key.return_value = PRIVATE_KEY.encode()
         self._create_nrf_relation()
 
         self._create_certificates_relation()
 
-        assert (root / "support/TLS/udm.key").read_text() == PRIVATE_KEY
+        assert (root / PRIVATE_KEY_PATH).read_text() == PRIVATE_KEY
 
     def test_given_certificates_are_stored_when_on_certificates_relation_broken_then_certificates_are_removed(  # noqa: E501
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        root = self.harness.get_filesystem_root(self.container_name)
-        (root / "support/TLS/udm.key").write_text("Whatever key content")
-        (root / CSR_PATH).write_text(CSR)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
         self.harness.set_can_connect(container=self.container_name, val=True)
+        self._write_keys_csr_and_certificate_files()
 
         self.harness.charm._on_certificates_relation_broken(event=Mock)
 
+        root = self.harness.get_filesystem_root(self.container_name)
         with pytest.raises(FileNotFoundError):
-            (root / "support/TLS/udm.key").read_text()
+            (root / PRIVATE_KEY_PATH).read_text()
         with pytest.raises(FileNotFoundError):
             (root / CERTIFICATE_PATH).read_text()
         with pytest.raises(FileNotFoundError):
             (root / CSR_PATH).read_text()
 
     def test_given_cannot_connect_on_certificates_relation_broken_then_certificates_are_not_removed(  # noqa: E501
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        root = self.harness.get_filesystem_root(self.container_name)
-        (root / "support/TLS/udm.key").write_text(PRIVATE_KEY)
-        (root / CSR_PATH).write_text(CSR)
-        (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
         self.harness.set_can_connect(container=self.container_name, val=False)
+        self._write_keys_csr_and_certificate_files()
 
         self.harness.charm._on_certificates_relation_broken(event=Mock())
 
-        container_private_key = (root / "support/TLS/udm.key").read_text()
+        root = self.harness.get_filesystem_root(self.container_name)
+        container_private_key = (root / PRIVATE_KEY_PATH).read_text()
         container_certificate = (root / CERTIFICATE_PATH).read_text()
         container_csr = (root / CSR_PATH).read_text()
         assert container_private_key == PRIVATE_KEY
@@ -504,31 +461,27 @@ class TestCharm():
         assert container_csr == CSR
 
     def test_given_certificates_not_stored_when_on_certificates_relation_broken_then_certificates_dont_exist(  # noqa: E501
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
         self.harness.set_can_connect(container=self.container_name, val=True)
 
         self.harness.charm._on_certificates_relation_broken(event=Mock)
 
         with pytest.raises(FileNotFoundError):
-            (root / "support/TLS/udm.key").read_text()
+            (root / PRIVATE_KEY_PATH).read_text()
         with pytest.raises(FileNotFoundError):
             (root / CERTIFICATE_PATH).read_text()
         with pytest.raises(FileNotFoundError):
             (root / CSR_PATH).read_text()
 
     def test_given_private_key_exists_when_on_certificates_relation_joined_then_csr_is_generated(
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="config", attach=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        home_network_private_key = self._get_home_network_private_key_as_hexadecimal_string()
-        (root / HOME_NETWORK_KEY_PATH).write_text(home_network_private_key)
-        (root / "support/TLS/udm.key").write_text("private key content")
+        (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
+        (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
         self.mock_generate_csr.return_value = CSR.encode()
         self._create_nrf_relation()
 
@@ -537,15 +490,12 @@ class TestCharm():
         assert (root / CSR_PATH).read_text() == CSR
 
     def test_given_private_key_exists_and_cert_not_yet_requested_when_on_certificates_relation_joined_then_cert_is_requested(  # noqa: E501
-        self
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        home_network_private_key = self._get_home_network_private_key_as_hexadecimal_string()
-        (root / HOME_NETWORK_KEY_PATH).write_text(home_network_private_key)
-        (root / "support/TLS/udm.key").write_text("private key content")
+        (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
+        (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
         self.mock_generate_csr.return_value = CSR.encode()
         self._create_nrf_relation()
 
@@ -556,16 +506,13 @@ class TestCharm():
         )
 
     def test_given_cert_already_stored_when_on_certificates_relation_joined_then_cert_is_not_requested(  # noqa: E501
-        self
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        home_network_private_key = self._get_home_network_private_key_as_hexadecimal_string()
-        (root / HOME_NETWORK_KEY_PATH).write_text(home_network_private_key)
+        (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
         (root / CSR_PATH).write_text(CSR)
-        (root / "support/TLS/udm.key").write_text("private key content")
+        (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
         self._create_nrf_relation()
 
         self._create_certificates_relation()
@@ -573,36 +520,27 @@ class TestCharm():
         self.mock_request_certificate_creation.assert_not_called()
 
     def test_given_csr_matches_stored_one_when_certificate_available_then_certificate_is_pushed(
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        home_network_private_key = self._get_home_network_private_key_as_hexadecimal_string()
-        (root / HOME_NETWORK_KEY_PATH).write_text(home_network_private_key)
-        (root / "support/TLS/udm.key").write_text("private key content")
+        (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
+        (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
         (root / CSR_PATH).write_text(CSR)
         self._create_nrf_relation()
         self._create_certificates_relation()
-        provider_certificate = Mock(ProviderCertificate)
-        provider_certificate.certificate = CERTIFICATE
-        provider_certificate.csr = CSR
-        self.mock_get_assigned_certs.return_value = [provider_certificate]
+        self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
         self.harness.container_pebble_ready("udm")
 
         assert (root / CERTIFICATE_PATH).read_text() == CERTIFICATE
 
     def test_given_csr_doesnt_match_stored_one_when_certificate_available_then_certificate_is_not_pushed(  # noqa: E501
-        self,
+        self, add_storage
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        home_network_private_key = self._get_home_network_private_key_as_hexadecimal_string()
-        (root / HOME_NETWORK_KEY_PATH).write_text(home_network_private_key)
+        (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
         (root / CSR_PATH).write_text(CSR)
         self._create_nrf_relation()
         self._create_certificates_relation()
@@ -617,10 +555,8 @@ class TestCharm():
             (root / CERTIFICATE_PATH).read_text()
 
     def test_given_certificate_does_not_match_stored_one_when_certificate_expiring_then_certificate_is_not_requested(  # noqa: E501
-        self
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
         (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
         event = Mock()
@@ -633,13 +569,10 @@ class TestCharm():
         self.mock_request_certificate_creation.assert_not_called()
 
     def test_given_certificate_matches_stored_one_when_certificate_expiring_then_certificate_is_requested(  # noqa: E501
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        private_key = "private key content"
-        (root / "support/TLS/udm.key").write_text(private_key)
+        (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
         (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
         event = Mock()
         event.certificate = CERTIFICATE
@@ -653,13 +586,10 @@ class TestCharm():
         )
 
     def test_given_cannot_connect_when_certificate_expiring_then_certificate_is_not_requested(
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
-        private_key = "private key content"
-        (root / "support/TLS/udm.key").write_text(private_key)
+        (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
         (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
         event = Mock()
         event.certificate = CERTIFICATE
@@ -688,9 +618,8 @@ class TestCharm():
         event.fail.assert_called_with(message="Home network private key is not stored yet.")
 
     def test_given_can_connect_and_key_stored_when_get_home_network_public_key_action_then_public_ip_is_returned(  # noqa: E501
-        self,
+        self, add_storage
     ):
-        self.harness.add_storage(storage_name="config", attach=True)
         root = self.harness.get_filesystem_root(self.container_name)
         (root / HOME_NETWORK_KEY_PATH).write_text(
             self._get_home_network_private_key_as_hexadecimal_string()
@@ -702,3 +631,12 @@ class TestCharm():
 
         expected_public_key = self._get_home_network_public_key_as_hexadecimal_string()
         event.set_results.assert_called_with({"public-key": expected_public_key})
+
+    def test_given_not_leader_when_collect_status_then_status_is_blocked(self):
+        self.harness.set_leader(is_leader=False)
+
+        self.harness.evaluate_status()
+
+        assert self.harness.model.unit.status == BlockedStatus(
+                                                    "Scaling is not implemented for this charm"
+                                                )
