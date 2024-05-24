@@ -34,7 +34,7 @@ PRIVATE_KEY_PATH = "support/TLS/udm.key"
 VALID_NRF_URL = "https://nrf:443"
 
 
-class TestCharm():
+class TestCharm:
 
     patcher_check_output = patch("charm.check_output")
     patcher_container_restart = patch("ops.model.Container.restart")
@@ -108,15 +108,16 @@ class TestCharm():
 
     def _create_nrf_relation(self) -> int:
         """Create NRF relation and return its relation id."""
-        relation_id = self.harness.add_relation(
+        relation_id = self.harness.add_relation(  # type:ignore
+
             relation_name=NRF_RELATION_NAME, remote_app="nrf-operator"
         )
-        self.harness.add_relation_unit(relation_id=relation_id, remote_unit_name="nrf-operator/0")
+        self.harness.add_relation_unit(relation_id=relation_id, remote_unit_name="nrf-operator/0")  # type:ignore
         return relation_id
 
     def _create_certificates_relation(self) -> int:
         """Create certificates relation and return its relation id."""
-        relation_id = self.harness.add_relation(
+        relation_id = self.harness.add_relation(  # type:ignore
             relation_name=TLS_RELATION_NAME, remote_app="tls-certificates-operator"
         )
         self.harness.add_relation_unit(
@@ -125,7 +126,7 @@ class TestCharm():
         return relation_id
 
     def _write_keys_csr_and_certificate_files(self) -> None:
-        root = self.harness.get_filesystem_root(self.container_name)
+        root = self.harness.get_filesystem_root(self.container_name)  # type:ignore
         (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
         (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
         (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
@@ -209,8 +210,8 @@ class TestCharm():
     @pytest.mark.parametrize(
         "storage_name",
         [
-            ("certs"),
-            ("config"),
+            "certs",
+            "config",
         ]
     )
     def test_given_storage_is_not_attached_when_configure_sdcore_udm_then_status_is_waiting(
@@ -224,7 +225,7 @@ class TestCharm():
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status ==  WaitingStatus(
+        assert self.harness.model.unit.status == WaitingStatus(
                                                     "Waiting for the storage to be attached"
                                                 )
 
@@ -332,7 +333,7 @@ class TestCharm():
         (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text("super different config file content")
         self._create_nrf_relation()
         self._create_certificates_relation()
-        self.mock_get_assigned_certs.return_value  = [self._get_provider_certificate()]
+        self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
 
