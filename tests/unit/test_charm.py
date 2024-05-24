@@ -27,7 +27,6 @@ CSR_PATH = "support/TLS/udm.csr"
 EXPECTED_CONFIG_FILE_PATH = "tests/unit/expected_udmcfg.yaml"
 HOME_NETWORK_KEY = "whatever home network key"
 HOME_NETWORK_KEY_PATH = "etc/udm/home_network.key"
-NAMESPACE = "whatever"
 POD_IP = b"1.1.1.1"
 PRIVATE_KEY = "whatever private key"
 PRIVATE_KEY_PATH = "support/TLS/udm.key"
@@ -60,11 +59,12 @@ class TestCharm:
         metadata = self._get_metadata()
         self.container_name = list(metadata["containers"].keys())[0]
 
-    def tearDown(self) -> None:
+    @staticmethod
+    def tearDown() -> None:
         patch.stopall()
 
     @pytest.fixture()
-    def mock_default_values(self):
+    def mock_default_values(self) -> None:
         self.mock_nrf_url.return_value = VALID_NRF_URL
         self.mock_check_output.return_value = POD_IP
         self.mock_generate_private_key.return_value = PRIVATE_KEY.encode()
@@ -73,7 +73,7 @@ class TestCharm:
     @pytest.fixture(autouse=True)
     def harness(self, setUp, request, mock_default_values):
         self.harness = testing.Harness(UDMOperatorCharm)
-        self.harness.set_model_name(name=NAMESPACE)
+        self.harness.set_model_name(name="whatever")
         self.harness.set_leader(is_leader=True)
         self.harness.begin()
         yield self.harness
@@ -81,9 +81,9 @@ class TestCharm:
         request.addfinalizer(self.tearDown)
 
     @pytest.fixture()
-    def add_storage(self):
-        self.harness.add_storage(storage_name="certs", attach=True)
-        self.harness.add_storage(storage_name="config", attach=True)
+    def add_storage(self) -> None:
+        self.harness.add_storage(storage_name="certs", attach=True)  # type:ignore
+        self.harness.add_storage(storage_name="config", attach=True)  # type:ignore
 
     @staticmethod
     def _get_metadata() -> dict:
@@ -115,15 +115,13 @@ class TestCharm:
         self.harness.add_relation_unit(relation_id=relation_id, remote_unit_name="nrf-operator/0")  # type:ignore
         return relation_id
 
-    def _create_certificates_relation(self) -> int:
-        """Create certificates relation and return its relation id."""
+    def _create_certificates_relation(self):
         relation_id = self.harness.add_relation(  # type:ignore
             relation_name=TLS_RELATION_NAME, remote_app="tls-certificates-operator"
         )
-        self.harness.add_relation_unit(
+        self.harness.add_relation_unit(  # type:ignore
             relation_id=relation_id, remote_unit_name="tls-certificates-operator/0"
         )
-        return relation_id
 
     def _write_keys_csr_and_certificate_files(self) -> None:
         root = self.harness.get_filesystem_root(self.container_name)  # type:ignore
@@ -203,9 +201,7 @@ class TestCharm:
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus(
-                                                    "Waiting for NRF endpoint to be available"
-                                                )
+        assert self.harness.model.unit.status == WaitingStatus("Waiting for NRF endpoint to be available")  # noqa: E501
 
     @pytest.mark.parametrize(
         "storage_name",
@@ -225,9 +221,7 @@ class TestCharm:
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus(
-                                                    "Waiting for the storage to be attached"
-                                                )
+        assert self.harness.model.unit.status == WaitingStatus("Waiting for the storage to be attached")  # noqa: E501
 
     def test_given_home_network_private_key_not_stored_when_configure_sdcore_udm_then_home_network_private_key_is_generated(  # noqa: E501
         self, add_storage
@@ -396,9 +390,7 @@ class TestCharm:
         self.harness.container_pebble_ready(container_name=self.container_name)
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus(
-                                                    "Waiting for pod IP address to be available"
-                                                )
+        assert self.harness.model.unit.status == WaitingStatus("Waiting for pod IP address to be available")  # noqa: E501
 
     def test_given_certificate_not_stored_when_configure_sdcore_udm_then_status_is_waiting(
         self, add_storage
@@ -412,9 +404,7 @@ class TestCharm:
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus(
-                                                    "Waiting for certificates to be stored"
-                                                )
+        assert self.harness.model.unit.status == WaitingStatus("Waiting for certificates to be stored")  # noqa: E501
 
     def test_given_can_connect_when_on_certificates_relation_created_then_private_key_is_generated(
         self, add_storage
@@ -638,6 +628,4 @@ class TestCharm:
 
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == BlockedStatus(
-                                                    "Scaling is not implemented for this charm"
-                                                )
+        assert self.harness.model.unit.status == BlockedStatus("Scaling is not implemented for this charm")  # noqa: E501
