@@ -103,6 +103,7 @@ async def deploy(ops_test: OpsTest, request):
     await ops_test.model.integrate(
         relation1=f"{WEBUI_CHARM_NAME}:auth_database", relation2=f"{DATABASE_APP_NAME}"
     )
+    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=WEBUI_CHARM_NAME)
     resources = {
         "udm-image": METADATA["resources"]["udm-image"]["upstream-source"],
     }
@@ -159,6 +160,7 @@ async def test_restore_nrf_and_wait_for_active_status(ops_test: OpsTest, deploy)
     assert ops_test.model
     await _deploy_nrf(ops_test)
     await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=TLS_PROVIDER_APP_NAME)
+    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=WEBUI_CHARM_NAME)
     await ops_test.model.integrate(relation1=DATABASE_APP_NAME, relation2=NRF_APP_NAME)
     await ops_test.model.integrate(relation1=APPLICATION_NAME, relation2=NRF_APP_NAME)
     await ops_test.model.wait_for_idle(apps=[APPLICATION_NAME], status="active", timeout=TIMEOUT)
