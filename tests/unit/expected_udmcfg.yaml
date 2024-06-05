@@ -2,6 +2,7 @@ configuration:
   keys:
     udmProfileAHNPrivateKey: whatever home network key
   nrfUri: https://nrf:443
+  webuiUri: sdcore-webui:9876
   sbi:
     bindingIPv4: 0.0.0.0
     port: 29503
