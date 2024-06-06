@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 import logging
+from typing import Generator
 from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
@@ -31,6 +32,9 @@ POD_IP = b"1.1.1.1"
 PRIVATE_KEY = "whatever private key"
 PRIVATE_KEY_PATH = "support/TLS/udm.key"
 VALID_NRF_URL = "https://nrf:443"
+WEBUI_URL = "sdcore-webui:9876"
+SDCORE_CONFIG_RELATION_NAME = "sdcore_config"
+WEBUI_APPLICATION_NAME = "sdcore-webui-operator"
 
 
 class TestCharm:
@@ -43,6 +47,10 @@ class TestCharm:
     patcher_get_assigned_certs = patch(f"{CERTIFICATES_LIB}.get_assigned_certificates")
     patcher_nrf_url = patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)   # noqa E501
     patcher_request_cert_creation = patch(f"{CERTIFICATES_LIB}.request_certificate_creation")
+    patcher_webui_url = patch(
+        "charms.sdcore_webui_k8s.v0.sdcore_config.SdcoreConfigRequires.webui_url",
+        new_callable=PropertyMock
+    )
 
     @pytest.fixture()
     def setUp(self):
@@ -56,6 +64,7 @@ class TestCharm:
         self.mock_home_network_private_key = X25519PrivateKey.generate()
         self.mock_cryptography_generate = TestCharm.patcher_cryptography_generate.start()
         self.mock_cryptography_generate.return_value = self.mock_home_network_private_key
+        self.mock_webui_url = TestCharm.patcher_webui_url.start()
         metadata = self._get_metadata()
         self.container_name = list(metadata["containers"].keys())[0]
 
@@ -91,6 +100,24 @@ class TestCharm:
         with open("charmcraft.yaml", "r") as f:
             data = yaml.safe_load(f)
         return data
+
+    @pytest.fixture()
+    def sdcore_config_relation_id(self) -> Generator[int, None, None]:
+        sdcore_config_relation_id = self.harness.add_relation(  # type:ignore
+            relation_name=SDCORE_CONFIG_RELATION_NAME,
+            remote_app=WEBUI_APPLICATION_NAME,
+        )
+        self.harness.add_relation_unit(  # type:ignore
+            relation_id=sdcore_config_relation_id, remote_unit_name=f"{WEBUI_APPLICATION_NAME}/0"
+        )
+        self.harness.update_relation_data(  # type:ignore
+            relation_id=sdcore_config_relation_id,
+            app_or_unit=WEBUI_APPLICATION_NAME,
+            key_values={
+                "webui_url": WEBUI_URL,
+            },
+        )
+        yield sdcore_config_relation_id
 
     @staticmethod
     def _read_file(path: str) -> str:
@@ -154,17 +181,17 @@ class TestCharm:
         assert self.harness.model.unit.status == WaitingStatus("Waiting for container to be ready")
 
     def test_given_container_can_connect_and_fiveg_nrf_relation_is_not_created_when_configure_sdcore_udm_then_status_is_blocked(  # noqa: E501
-        self,
+        self, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
-
+        self._create_certificates_relation()
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == BlockedStatus("Waiting for fiveg_nrf relation")
+        assert self.harness.model.unit.status == BlockedStatus("Waiting for fiveg_nrf relation(s)")
 
     def test_given_certificates_relation_not_created_when_configure_sdcore_udm_then_status_is_blocked(  # noqa E501
-        self,
+        self, sdcore_config_relation_id
     ):
         self._create_nrf_relation()
         self.harness.set_can_connect(container=self.container_name, val=True)
@@ -172,11 +199,26 @@ class TestCharm:
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == BlockedStatus("Waiting for certificates relation")
+        assert self.harness.model.unit.status == BlockedStatus(
+            "Waiting for certificates relation(s)"
+        )
 
+    def test_given_sdcore_config_relation_not_created_when_configure_sdcore_udm_then_status_is_blocked(  # noqa E501
+        self,
+    ):
+        self._create_nrf_relation()
+        self._create_certificates_relation()
+        self.harness.set_can_connect(container=self.container_name, val=True)
+
+        self.harness.charm._configure_sdcore_udm(event=Mock())
+        self.harness.evaluate_status()
+
+        assert self.harness.model.unit.status == BlockedStatus(
+            "Waiting for sdcore_config relation(s)"
+        )
 
     def test_given_udm_charm_in_active_status_when_nrf_relation_breaks_then_status_is_blocked(
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self._write_keys_csr_and_certificate_files()
         root = self.harness.get_filesystem_root(self.container_name)
@@ -188,10 +230,29 @@ class TestCharm:
         self.harness.remove_relation(nrf_relation_id)
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == BlockedStatus("Waiting for fiveg_nrf relation")
+        assert self.harness.model.unit.status == BlockedStatus(
+            "Waiting for fiveg_nrf relation(s)"
+        )
+
+    def test_given_udm_charm_in_active_status_when_sdcore_config_relation_breaks_then_status_is_blocked(  # noqa E501
+        self, add_storage, sdcore_config_relation_id
+    ):
+        self._write_keys_csr_and_certificate_files()
+        root = self.harness.get_filesystem_root(self.container_name)
+        (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text("super different config file content")
+        self._create_certificates_relation()
+        self._create_nrf_relation()
+        self.harness.container_pebble_ready(self.container_name)
+
+        self.harness.remove_relation(sdcore_config_relation_id)
+        self.harness.evaluate_status()
+
+        assert self.harness.model.unit.status == BlockedStatus(
+            "Waiting for sdcore_config relation(s)"
+        )
 
     def test_given_container_can_connect_and_fiveg_nrf_relation_is_created_and_not_available_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self.mock_nrf_url.return_value = None
@@ -203,6 +264,20 @@ class TestCharm:
 
         assert self.harness.model.unit.status == WaitingStatus("Waiting for NRF endpoint to be available")  # noqa: E501
 
+    def test_given_container_can_connect_and_sdcore_config_relation_is_created_and_not_available_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
+        self, add_storage, sdcore_config_relation_id
+    ):
+        self.harness.set_can_connect(container=self.container_name, val=True)
+        self.mock_nrf_url.return_value = VALID_NRF_URL
+        self.mock_webui_url.return_value = ""
+        self._create_nrf_relation()
+        self._create_certificates_relation()
+
+        self.harness.charm._configure_sdcore_udm(event=Mock())
+        self.harness.evaluate_status()
+
+        assert self.harness.model.unit.status == WaitingStatus("Waiting for Webui data to be available")  # noqa: E501
+
     @pytest.mark.parametrize(
         "storage_name",
         [
@@ -211,7 +286,7 @@ class TestCharm:
         ]
     )
     def test_given_storage_is_not_attached_when_configure_sdcore_udm_then_status_is_waiting(
-        self, storage_name
+        self, storage_name, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self.harness.add_storage(storage_name=storage_name, attach=True)
@@ -224,7 +299,7 @@ class TestCharm:
         assert self.harness.model.unit.status == WaitingStatus("Waiting for the storage to be attached")  # noqa: E501
 
     def test_given_home_network_private_key_not_stored_when_configure_sdcore_udm_then_home_network_private_key_is_generated(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self.mock_generate_private_key.return_value = PRIVATE_KEY.encode()
@@ -239,7 +314,7 @@ class TestCharm:
         assert (root / HOME_NETWORK_KEY_PATH).read_text() == home_network_private_key
 
     def test_given_home_network_private_key_stored_when_configure_sdcore_udm_then_home_network_private_key_is_not_generated(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         root = self.harness.get_filesystem_root(self.container_name)
@@ -253,12 +328,13 @@ class TestCharm:
         assert (root / HOME_NETWORK_KEY_PATH).stat().st_mtime == config_modification_time
 
     def test_given_config_file_is_not_written_when_configure_sdcore_udm_is_called_then_config_file_is_written_with_expected_content(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self._write_keys_csr_and_certificate_files()
         self._create_nrf_relation()
         self._create_certificates_relation()
+        self.mock_webui_url.return_value = WEBUI_URL
         expected_config_file_content = self._read_file(EXPECTED_CONFIG_FILE_PATH).strip()
         self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
@@ -268,7 +344,7 @@ class TestCharm:
         assert (root / f"etc/udm/{CONFIG_FILE_NAME}").read_text() == expected_config_file_content
 
     def test_given_config_file_is_written_and_is_not_changed_when_configure_sdcore_udm_is_called_then_config_file_is_not_written(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self._write_keys_csr_and_certificate_files()
@@ -279,6 +355,7 @@ class TestCharm:
         config_modification_time = (root / f"etc/udm/{CONFIG_FILE_NAME}").stat().st_mtime
         self._create_nrf_relation()
         self._create_certificates_relation()
+        self.mock_webui_url.return_value = WEBUI_URL
         self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
@@ -286,7 +363,7 @@ class TestCharm:
         assert (root / f"etc/udm/{CONFIG_FILE_NAME}").stat().st_mtime == config_modification_time
 
     def test_given_config_file_is_written_and_is_not_changed_when_configure_sdcore_udm_is_called_then_after_writting_config_file_service_is_not_restarted(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self._write_keys_csr_and_certificate_files()
@@ -296,6 +373,7 @@ class TestCharm:
         )
         self._create_nrf_relation()
         self._create_certificates_relation()
+        self.mock_webui_url.return_value = WEBUI_URL
         self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
         self.harness.charm._configure_sdcore_udm(event=Mock())
@@ -303,7 +381,7 @@ class TestCharm:
         self.mock_container_restart.assert_not_called()
 
     def test_given_config_file_is_written_and_is_changed_when_configure_sdcore_udm_is_called_then_config_file_is_written(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self._write_keys_csr_and_certificate_files()
@@ -311,6 +389,7 @@ class TestCharm:
         (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text("super different config file content")
         self._create_nrf_relation()
         self._create_certificates_relation()
+        self.mock_webui_url.return_value = WEBUI_URL
         expected_config_file_content = self._read_file(EXPECTED_CONFIG_FILE_PATH).strip()
         self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
 
@@ -319,7 +398,7 @@ class TestCharm:
         assert (root / f"etc/udm/{CONFIG_FILE_NAME}").read_text() == expected_config_file_content
 
     def test_given_config_file_is_written_and_is_changed_when_configure_sdcore_udm_is_called_then_after_writting_config_file_service_is_restarted(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self._write_keys_csr_and_certificate_files()
@@ -333,8 +412,26 @@ class TestCharm:
 
         self.mock_container_restart.assert_called_with(self.container_name)
 
+    def test_given_config_file_is_written_and_webui_data_is_changed_when_configure_sdcore_udm_is_called_then_after_writting_config_file_service_is_restarted(  # noqa: E501
+        self, add_storage, sdcore_config_relation_id
+    ):
+        self.harness.set_can_connect(container=self.container_name, val=True)
+        self._write_keys_csr_and_certificate_files()
+        root = self.harness.get_filesystem_root(self.container_name)
+        (root / f"etc/udm/{CONFIG_FILE_NAME}").write_text(
+            self._read_file(EXPECTED_CONFIG_FILE_PATH)
+        )
+        self._create_nrf_relation()
+        self._create_certificates_relation()
+        self.mock_webui_url.return_value = "mywebui:9870"
+        self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
+
+        self.harness.charm._configure_sdcore_udm(event=Mock())
+
+        self.mock_container_restart.assert_called_with(self.container_name)
+
     def test_given_config_file_is_written_when_configure_sdcore_udm_is_called_then_pebble_plan_is_applied(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self._write_keys_csr_and_certificate_files()
@@ -367,7 +464,7 @@ class TestCharm:
         assert expected_plan == updated_plan
 
     def test_given_config_file_written_when_configure_sdcore_udm_is_called_then_status_is_active(
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self._write_keys_csr_and_certificate_files()
@@ -376,13 +473,18 @@ class TestCharm:
         self.mock_get_assigned_certs.return_value = [self._get_provider_certificate()]
         self._create_nrf_relation()
         self._create_certificates_relation()
+        self.mock_webui_url.return_value = WEBUI_URL
 
         self.harness.container_pebble_ready(self.container_name)
         self.harness.evaluate_status()
 
         assert self.harness.model.unit.status == ActiveStatus()
 
-    def test_given_ip_not_available_when_configure_then_status_is_waiting(self, add_storage):
+    def test_given_ip_not_available_when_configure_then_status_is_waiting(
+        self,
+        add_storage,
+        sdcore_config_relation_id,
+    ):
         self.mock_check_output.return_value = "".encode()
         self._create_nrf_relation()
         self._create_certificates_relation()
@@ -393,7 +495,7 @@ class TestCharm:
         assert self.harness.model.unit.status == WaitingStatus("Waiting for pod IP address to be available")  # noqa: E501
 
     def test_given_certificate_not_stored_when_configure_sdcore_udm_then_status_is_waiting(
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         root = self.harness.get_filesystem_root(self.container_name)
@@ -407,7 +509,7 @@ class TestCharm:
         assert self.harness.model.unit.status == WaitingStatus("Waiting for certificates to be stored")  # noqa: E501
 
     def test_given_can_connect_when_on_certificates_relation_created_then_private_key_is_generated(
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         root = self.harness.get_filesystem_root(self.container_name)
@@ -420,7 +522,7 @@ class TestCharm:
         assert (root / PRIVATE_KEY_PATH).read_text() == PRIVATE_KEY
 
     def test_given_certificates_are_stored_when_on_certificates_relation_broken_then_certificates_are_removed(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         self._write_keys_csr_and_certificate_files()
@@ -436,7 +538,7 @@ class TestCharm:
             (root / CSR_PATH).read_text()
 
     def test_given_cannot_connect_on_certificates_relation_broken_then_certificates_are_not_removed(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=False)
         self._write_keys_csr_and_certificate_files()
@@ -452,7 +554,7 @@ class TestCharm:
         assert container_csr == CSR
 
     def test_given_certificates_not_stored_when_on_certificates_relation_broken_then_certificates_dont_exist(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         root = self.harness.get_filesystem_root(self.container_name)
         self.harness.set_can_connect(container=self.container_name, val=True)
@@ -467,7 +569,7 @@ class TestCharm:
             (root / CSR_PATH).read_text()
 
     def test_given_private_key_exists_when_on_certificates_relation_joined_then_csr_is_generated(
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         root = self.harness.get_filesystem_root(self.container_name)
@@ -481,7 +583,7 @@ class TestCharm:
         assert (root / CSR_PATH).read_text() == CSR
 
     def test_given_private_key_exists_and_cert_not_yet_requested_when_on_certificates_relation_joined_then_cert_is_requested(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         root = self.harness.get_filesystem_root(self.container_name)
@@ -497,7 +599,7 @@ class TestCharm:
         )
 
     def test_given_cert_already_stored_when_on_certificates_relation_joined_then_cert_is_not_requested(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         root = self.harness.get_filesystem_root(self.container_name)
@@ -511,7 +613,7 @@ class TestCharm:
         self.mock_request_certificate_creation.assert_not_called()
 
     def test_given_csr_matches_stored_one_when_certificate_available_then_certificate_is_pushed(
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         root = self.harness.get_filesystem_root(self.container_name)
@@ -527,7 +629,7 @@ class TestCharm:
         assert (root / CERTIFICATE_PATH).read_text() == CERTIFICATE
 
     def test_given_csr_doesnt_match_stored_one_when_certificate_available_then_certificate_is_not_pushed(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         self.harness.set_can_connect(container=self.container_name, val=True)
         root = self.harness.get_filesystem_root(self.container_name)
@@ -546,7 +648,7 @@ class TestCharm:
             (root / CERTIFICATE_PATH).read_text()
 
     def test_given_certificate_does_not_match_stored_one_when_certificate_expiring_then_certificate_is_not_requested(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         root = self.harness.get_filesystem_root(self.container_name)
         (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
@@ -560,7 +662,7 @@ class TestCharm:
         self.mock_request_certificate_creation.assert_not_called()
 
     def test_given_certificate_matches_stored_one_when_certificate_expiring_then_certificate_is_requested(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         root = self.harness.get_filesystem_root(self.container_name)
         (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
@@ -577,7 +679,7 @@ class TestCharm:
         )
 
     def test_given_cannot_connect_when_certificate_expiring_then_certificate_is_not_requested(
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         root = self.harness.get_filesystem_root(self.container_name)
         (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
@@ -609,7 +711,7 @@ class TestCharm:
         event.fail.assert_called_with(message="Home network private key is not stored yet.")
 
     def test_given_can_connect_and_key_stored_when_get_home_network_public_key_action_then_public_ip_is_returned(  # noqa: E501
-        self, add_storage
+        self, add_storage, sdcore_config_relation_id
     ):
         root = self.harness.get_filesystem_root(self.container_name)
         (root / HOME_NETWORK_KEY_PATH).write_text(
