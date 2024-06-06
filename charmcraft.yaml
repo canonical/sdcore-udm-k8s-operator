@@ -24,7 +24,7 @@ resources:
   udm-image:
     type: oci-image
     description: OCI image for SD-Core's UDM
-    upstream-source: ghcr.io/canonical/sdcore-udm:1.4.0
+    upstream-source: ghcr.io/canonical/sdcore-udm:1.4.2
 
 storage:
   config:
@@ -40,7 +40,9 @@ requires:
   certificates:
     interface: tls-certificates
   logging:
-      interface: loki_push_api
+    interface: loki_push_api
+  sdcore_config:
+    interface: sdcore_config
 
 assumes:
   - k8s-api
