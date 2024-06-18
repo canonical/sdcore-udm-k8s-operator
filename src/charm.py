@@ -50,6 +50,7 @@ CERTIFICATE_NAME = "udm.pem"
 CERTIFICATE_COMMON_NAME = "udm.sdcore"
 LOGGING_RELATION_NAME = "logging"
 SDCORE_CONFIG_RELATION_NAME = "sdcore_config"
+WORKLOAD_VERSION_FILE_NAME = "/etc/workload-version"
 
 
 class UDMOperatorCharm(CharmBase):
@@ -101,8 +102,7 @@ class UDMOperatorCharm(CharmBase):
             self._on_get_home_network_public_key_action,
         )
         self.framework.observe(
-            self._webui_requires.on.webui_url_available,
-            self._configure_sdcore_udm
+            self._webui_requires.on.webui_url_available, self._configure_sdcore_udm
         )
         self.framework.observe(self.on.sdcore_config_relation_joined, self._configure_sdcore_udm)
 
@@ -167,11 +167,13 @@ class UDMOperatorCharm(CharmBase):
             logger.info("Waiting for container to be ready")
             return
 
+        self.unit.set_workload_version(self._get_workload_version())
+
         if missing_relations := self._missing_relations():
             event.add_status(
                 BlockedStatus(f"Waiting for {', '.join(missing_relations)} relation(s)")
             )
-            logger.info("Waiting for %s  relation(s)", ', '.join(missing_relations))
+            logger.info("Waiting for %s  relation(s)", ", ".join(missing_relations))
             return
 
         if not self._nrf_is_available():
@@ -260,9 +262,7 @@ class UDMOperatorCharm(CharmBase):
             list: missing relation names.
         """
         missing_relations = []
-        for relation in [NRF_RELATION_NAME,
-                         TLS_RELATION_NAME,
-                         SDCORE_CONFIG_RELATION_NAME]:
+        for relation in [NRF_RELATION_NAME, TLS_RELATION_NAME, SDCORE_CONFIG_RELATION_NAME]:
             if not self._relation_is_created(relation):
                 missing_relations.append(relation)
         return missing_relations
@@ -439,6 +439,24 @@ class UDMOperatorCharm(CharmBase):
         self._container.push(path=f"{CERTS_DIR_PATH}/{CSR_NAME}", source=csr.decode().strip())
         logger.info("Pushed CSR to workload")
 
+    def _get_workload_version(self) -> str:
+        """Return the workload version.
+
+        Checks for the presence of /etc/workload-version file
+        and if present, returns the contents of that file. If
+        the file is not present, an empty string is returned.
+
+        Returns:
+            string: A human readable string representing the
+            version of the workload
+        """
+        if self._container.exists(path=f"{WORKLOAD_VERSION_FILE_NAME}"):
+            version_file_content = self._container.pull(
+                path=f"{WORKLOAD_VERSION_FILE_NAME}"
+            ).read()
+            return version_file_content
+        return ""
+
     def _configure_pebble(self, restart: bool = False) -> None:
         """Configure the Pebble layer.
 
@@ -447,9 +465,7 @@ class UDMOperatorCharm(CharmBase):
         """
         plan = self._container.get_plan()
         if plan.services != self._pebble_layer.services:
-            self._container.add_layer(
-                self._container_name, self._pebble_layer, combine=True
-            )
+            self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
             self._container.replan()
             logger.info("New layer added: %s", self._pebble_layer)
         if restart:
