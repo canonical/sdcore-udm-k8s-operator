@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 import logging
+import os
 from typing import Generator
 from unittest.mock import Mock, PropertyMock, patch
 
@@ -38,18 +39,21 @@ WEBUI_APPLICATION_NAME = "sdcore-webui-operator"
 
 
 class TestCharm:
-
     patcher_check_output = patch("charm.check_output")
     patcher_container_restart = patch("ops.model.Container.restart")
-    patcher_cryptography_generate = patch("cryptography.hazmat.primitives.asymmetric.x25519.X25519PrivateKey.generate")   # noqa E501
+    patcher_cryptography_generate = patch(
+        "cryptography.hazmat.primitives.asymmetric.x25519.X25519PrivateKey.generate"
+    )  # noqa E501
     patcher_generate_csr = patch("charm.generate_csr")
     patcher_generate_private_key = patch("charm.generate_private_key")
     patcher_get_assigned_certs = patch(f"{CERTIFICATES_LIB}.get_assigned_certificates")
-    patcher_nrf_url = patch("charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock)   # noqa E501
+    patcher_nrf_url = patch(
+        "charms.sdcore_nrf_k8s.v0.fiveg_nrf.NRFRequires.nrf_url", new_callable=PropertyMock
+    )  # noqa E501
     patcher_request_cert_creation = patch(f"{CERTIFICATES_LIB}.request_certificate_creation")
     patcher_webui_url = patch(
         "charms.sdcore_webui_k8s.v0.sdcore_config.SdcoreConfigRequires.webui_url",
-        new_callable=PropertyMock
+        new_callable=PropertyMock,
     )
 
     @pytest.fixture()
@@ -136,7 +140,6 @@ class TestCharm:
     def _create_nrf_relation(self) -> int:
         """Create NRF relation and return its relation id."""
         relation_id = self.harness.add_relation(  # type:ignore
-
             relation_name=NRF_RELATION_NAME, remote_app="nrf-operator"
         )
         self.harness.add_relation_unit(relation_id=relation_id, remote_unit_name="nrf-operator/0")  # type:ignore
@@ -230,9 +233,7 @@ class TestCharm:
         self.harness.remove_relation(nrf_relation_id)
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == BlockedStatus(
-            "Waiting for fiveg_nrf relation(s)"
-        )
+        assert self.harness.model.unit.status == BlockedStatus("Waiting for fiveg_nrf relation(s)")
 
     def test_given_udm_charm_in_active_status_when_sdcore_config_relation_breaks_then_status_is_blocked(  # noqa E501
         self, add_storage, sdcore_config_relation_id
@@ -262,7 +263,9 @@ class TestCharm:
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus("Waiting for NRF endpoint to be available")  # noqa: E501
+        assert self.harness.model.unit.status == WaitingStatus(
+            "Waiting for NRF endpoint to be available"
+        )
 
     def test_given_container_can_connect_and_sdcore_config_relation_is_created_and_not_available_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501
         self, add_storage, sdcore_config_relation_id
@@ -276,14 +279,16 @@ class TestCharm:
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus("Waiting for Webui data to be available")  # noqa: E501
+        assert self.harness.model.unit.status == WaitingStatus(
+            "Waiting for Webui data to be available"
+        )
 
     @pytest.mark.parametrize(
         "storage_name",
         [
             "certs",
             "config",
-        ]
+        ],
     )
     def test_given_storage_is_not_attached_when_configure_sdcore_udm_then_status_is_waiting(
         self, storage_name, sdcore_config_relation_id
@@ -296,7 +301,9 @@ class TestCharm:
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus("Waiting for the storage to be attached")  # noqa: E501
+        assert self.harness.model.unit.status == WaitingStatus(
+            "Waiting for the storage to be attached"
+        )
 
     def test_given_home_network_private_key_not_stored_when_configure_sdcore_udm_then_home_network_private_key_is_generated(  # noqa: E501
         self, add_storage, sdcore_config_relation_id
@@ -492,7 +499,9 @@ class TestCharm:
         self.harness.container_pebble_ready(container_name=self.container_name)
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus("Waiting for pod IP address to be available")  # noqa: E501
+        assert self.harness.model.unit.status == WaitingStatus(
+            "Waiting for pod IP address to be available"
+        )
 
     def test_given_certificate_not_stored_when_configure_sdcore_udm_then_status_is_waiting(
         self, add_storage, sdcore_config_relation_id
@@ -506,7 +515,9 @@ class TestCharm:
         self.harness.charm._configure_sdcore_udm(event=Mock())
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == WaitingStatus("Waiting for certificates to be stored")  # noqa: E501
+        assert self.harness.model.unit.status == WaitingStatus(
+            "Waiting for certificates to be stored"
+        )
 
     def test_given_can_connect_when_on_certificates_relation_created_then_private_key_is_generated(
         self, add_storage, sdcore_config_relation_id
@@ -730,4 +741,26 @@ class TestCharm:
 
         self.harness.evaluate_status()
 
-        assert self.harness.model.unit.status == BlockedStatus("Scaling is not implemented for this charm")  # noqa: E501
+        assert self.harness.model.unit.status == BlockedStatus(
+            "Scaling is not implemented for this charm"
+        )
+
+    def test_given_no_workload_version_file_when_container_can_connect_then_workload_version_not_set(  # noqa: E501
+        self,
+    ):
+        self.harness.container_pebble_ready(container_name=self.container_name)
+        self.harness.evaluate_status()
+        version = self.harness.get_workload_version()
+        assert version == ""
+
+    def test_given_workload_version_file_when_container_can_connect_then_workload_version_set(
+        self,
+    ):
+        expected_version = "1.2.3"
+        root = self.harness.get_filesystem_root(self.container_name)
+        os.mkdir(f"{root}/etc")
+        (root / "etc/workload-version").write_text(expected_version)
+        self.harness.container_pebble_ready(container_name=self.container_name)
+        self.harness.evaluate_status()
+        version = self.harness.get_workload_version()
+        assert version == expected_version
