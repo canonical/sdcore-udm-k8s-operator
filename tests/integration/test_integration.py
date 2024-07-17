@@ -25,8 +25,8 @@ TLS_PROVIDER_APP_NAME = "self-signed-certificates"
 TLS_PROVIDER_APP_CHANNEL = "latest/stable"
 GRAFANA_AGENT_APP_NAME = "grafana-agent-k8s"
 GRAFANA_AGENT_APP_CHANNEL = "latest/stable"
-WEBUI_CHARM_NAME = "sdcore-webui-k8s"
-WEBUI_CHARM_CHANNEL = "1.5/edge"
+NMS_CHARM_NAME = "sdcore-nms-k8s"
+NMS_CHARM_CHANNEL = "1.5/edge"
 TIMEOUT = 1000
 
 
@@ -51,12 +51,12 @@ async def _deploy_nrf(ops_test: OpsTest):
     )
 
 
-async def _deploy_webui(ops_test: OpsTest):
+async def _deploy_nms(ops_test: OpsTest):
     assert ops_test.model
     await ops_test.model.deploy(
-        WEBUI_CHARM_NAME,
-        application_name=WEBUI_CHARM_NAME,
-        channel=WEBUI_CHARM_CHANNEL,
+        NMS_CHARM_NAME,
+        application_name=NMS_CHARM_NAME,
+        channel=NMS_CHARM_CHANNEL,
     )
 
 
@@ -88,22 +88,22 @@ async def deploy(ops_test: OpsTest, request):
     deploy_nrf = asyncio.create_task(_deploy_nrf(ops_test))
     deploy_tls = asyncio.create_task(_deploy_tls_provider(ops_test))
     deploy_grafana_agent = asyncio.create_task(_deploy_grafana_agent(ops_test))
-    deploy_webui = asyncio.create_task(_deploy_webui(ops_test))
+    deploy_nms = asyncio.create_task(_deploy_nms(ops_test))
     charm = Path(request.config.getoption("--charm_path")).resolve()
     await deploy_database
     await deploy_tls
     await deploy_nrf
     await deploy_grafana_agent
-    await deploy_webui
+    await deploy_nms
     await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=TLS_PROVIDER_APP_NAME)
     await ops_test.model.integrate(relation1=DATABASE_APP_NAME, relation2=NRF_APP_NAME)
     await ops_test.model.integrate(
-        relation1=f"{WEBUI_CHARM_NAME}:common_database", relation2=f"{DATABASE_APP_NAME}"
+        relation1=f"{NMS_CHARM_NAME}:common_database", relation2=f"{DATABASE_APP_NAME}"
     )
     await ops_test.model.integrate(
-        relation1=f"{WEBUI_CHARM_NAME}:auth_database", relation2=f"{DATABASE_APP_NAME}"
+        relation1=f"{NMS_CHARM_NAME}:auth_database", relation2=f"{DATABASE_APP_NAME}"
     )
-    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=WEBUI_CHARM_NAME)
+    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=NMS_CHARM_NAME)
     resources = {
         "udm-image": METADATA["resources"]["udm-image"]["upstream-source"],
     }
@@ -136,7 +136,7 @@ async def test_relate_and_wait_for_active_status(ops_test: OpsTest, deploy):
     await ops_test.model.integrate(relation1=APPLICATION_NAME, relation2=TLS_PROVIDER_APP_NAME)
     await ops_test.model.integrate(
         relation1=f"{APPLICATION_NAME}:sdcore_config",
-        relation2=f"{WEBUI_CHARM_NAME}:sdcore-config",
+        relation2=f"{NMS_CHARM_NAME}:sdcore-config",
     )
     await ops_test.model.integrate(
         relation1=f"{APPLICATION_NAME}:logging",
@@ -165,7 +165,7 @@ async def test_restore_nrf_and_wait_for_active_status(ops_test: OpsTest, deploy)
     assert ops_test.model
     await _deploy_nrf(ops_test)
     await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=TLS_PROVIDER_APP_NAME)
-    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=WEBUI_CHARM_NAME)
+    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=NMS_CHARM_NAME)
     await ops_test.model.integrate(relation1=DATABASE_APP_NAME, relation2=NRF_APP_NAME)
     await ops_test.model.integrate(relation1=APPLICATION_NAME, relation2=NRF_APP_NAME)
     await ops_test.model.wait_for_idle(apps=[APPLICATION_NAME], status="active", timeout=TIMEOUT)
@@ -187,25 +187,25 @@ async def test_restore_tls_and_wait_for_active_status(ops_test: OpsTest, deploy)
 
 
 @pytest.mark.abort_on_fail
-async def test_remove_webui_and_wait_for_blocked_status(ops_test: OpsTest, deploy):
+async def test_remove_nms_and_wait_for_blocked_status(ops_test: OpsTest, deploy):
     assert ops_test.model
-    await ops_test.model.remove_application(WEBUI_CHARM_NAME, block_until_done=True)
+    await ops_test.model.remove_application(NMS_CHARM_NAME, block_until_done=True)
     await ops_test.model.wait_for_idle(apps=[APPLICATION_NAME], status="blocked", timeout=60)
 
 
 @pytest.mark.abort_on_fail
-async def test_restore_webui_and_wait_for_active_status(ops_test: OpsTest, deploy):
+async def test_restore_nms_and_wait_for_active_status(ops_test: OpsTest, deploy):
     assert ops_test.model
-    await _deploy_webui(ops_test)
+    await _deploy_nms(ops_test)
     await ops_test.model.integrate(
-        relation1=f"{WEBUI_CHARM_NAME}:common_database", relation2=f"{DATABASE_APP_NAME}"
+        relation1=f"{NMS_CHARM_NAME}:common_database", relation2=f"{DATABASE_APP_NAME}"
     )
     await ops_test.model.integrate(
-        relation1=f"{WEBUI_CHARM_NAME}:auth_database", relation2=f"{DATABASE_APP_NAME}"
+        relation1=f"{NMS_CHARM_NAME}:auth_database", relation2=f"{DATABASE_APP_NAME}"
     )
     await ops_test.model.integrate(
         relation1=f"{APPLICATION_NAME}:sdcore_config",
-        relation2=f"{WEBUI_CHARM_NAME}:sdcore-config",
+        relation2=f"{NMS_CHARM_NAME}:sdcore-config",
     )
     await ops_test.model.wait_for_idle(apps=[APPLICATION_NAME], status="active", timeout=TIMEOUT)
 
