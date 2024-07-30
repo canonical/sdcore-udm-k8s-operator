@@ -24,8 +24,8 @@ output "logging_endpoint" {
 }
 
 output "sdcore_config_endpoint" {
-  description = "Name of the endpoint used to integrate with the Webui."
-  value       = "sdcore-config"
+  description = "Name of the endpoint used to integrate with the NMS."
+  value       = "sdcore_config"
 }
 
 # Provided integration endpoints

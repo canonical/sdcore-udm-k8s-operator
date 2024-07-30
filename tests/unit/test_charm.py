@@ -34,7 +34,7 @@ PRIVATE_KEY = "whatever private key"
 PRIVATE_KEY_PATH = "support/TLS/udm.key"
 VALID_NRF_URL = "https://nrf:443"
 WEBUI_URL = "sdcore-webui:9876"
-SDCORE_CONFIG_RELATION_NAME = "sdcore-config"
+SDCORE_CONFIG_RELATION_NAME = "sdcore_config"
 NMS_APPLICATION_NAME = "sdcore-nms-operator"
 
 
@@ -217,7 +217,7 @@ class TestCharm:
         self.harness.evaluate_status()
 
         assert self.harness.model.unit.status == BlockedStatus(
-            "Waiting for sdcore-config relation(s)"
+            "Waiting for sdcore_config relation(s)"
         )
 
     def test_given_udm_charm_in_active_status_when_nrf_relation_breaks_then_status_is_blocked(
@@ -249,7 +249,7 @@ class TestCharm:
         self.harness.evaluate_status()
 
         assert self.harness.model.unit.status == BlockedStatus(
-            "Waiting for sdcore-config relation(s)"
+            "Waiting for sdcore_config relation(s)"
         )
 
     def test_given_container_can_connect_and_fiveg_nrf_relation_is_created_and_not_available_when_configure_sdcore_udm_then_status_is_waiting(  # noqa: E501

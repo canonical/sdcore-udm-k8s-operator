@@ -49,7 +49,7 @@ CSR_NAME = "udm.csr"
 CERTIFICATE_NAME = "udm.pem"
 CERTIFICATE_COMMON_NAME = "udm.sdcore"
 LOGGING_RELATION_NAME = "logging"
-SDCORE_CONFIG_RELATION_NAME = "sdcore-config"
+SDCORE_CONFIG_RELATION_NAME = "sdcore_config"
 WORKLOAD_VERSION_FILE_NAME = "/etc/workload-version"
 
 
