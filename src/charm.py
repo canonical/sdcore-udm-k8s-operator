@@ -9,15 +9,15 @@ from ipaddress import IPv4Address
 from subprocess import check_output
 from typing import List, Optional
 
-from charms.loki_k8s.v1.loki_push_api import LogForwarder  # type: ignore[import]
-from charms.prometheus_k8s.v0.prometheus_scrape import (  # type: ignore[import]
+from charms.loki_k8s.v1.loki_push_api import LogForwarder
+from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointProvider,
 )
-from charms.sdcore_nrf_k8s.v0.fiveg_nrf import NRFRequires  # type: ignore[import]
-from charms.sdcore_webui_k8s.v0.sdcore_config import (  # type: ignore[import]
+from charms.sdcore_nrf_k8s.v0.fiveg_nrf import NRFRequires
+from charms.sdcore_webui_k8s.v0.sdcore_config import (
     SdcoreConfigRequires,
 )
-from charms.tls_certificates_interface.v3.tls_certificates import (  # type: ignore[import]
+from charms.tls_certificates_interface.v3.tls_certificates import (
     CertificateExpiringEvent,
     TLSCertificatesRequiresV3,
     generate_csr,
@@ -315,12 +315,18 @@ class UDMOperatorCharm(CharmBase):
         Returns:
             content (str): desired config file content
         """
+        if not self._nrf_requires.nrf_url:
+            return ""
+        if not (pod_ip := _get_pod_ip()):
+            return ""
+        if not self._webui_requires.webui_url:
+            return ""
         return self._render_config_file(
             nrf_url=self._nrf_requires.nrf_url,
             udm_sbi_port=UDM_SBI_PORT,
-            pod_ip=_get_pod_ip(),  # type: ignore[arg-type]
+            pod_ip=pod_ip,
             scheme="https",
-            _home_network_private_key=self._get_home_network_private_key(),  # type: ignore[arg-type] # noqa: E501
+            _home_network_private_key=self._get_home_network_private_key(),
             webui_uri=self._webui_requires.webui_url,
         )
 
@@ -568,7 +574,7 @@ class UDMOperatorCharm(CharmBase):
             return
         event.set_results(
             {
-                "public-key": self._get_home_network_public_key(),  # type: ignore[arg-type] # noqa: E501
+                "public-key": self._get_home_network_public_key(),
             }
         )
 
@@ -604,7 +610,7 @@ class UDMOperatorCharm(CharmBase):
             str: The Home Network public key in hexadecimal.
         """
         private_key_string = self._get_home_network_private_key()
-        private_bytes = bytes.fromhex(private_key_string)  # type: ignore[arg-type]
+        private_bytes = bytes.fromhex(private_key_string)
         private_key = X25519PrivateKey.from_private_bytes(private_bytes)
         public_key = private_key.public_key()
         public_bytes = public_key.public_bytes(
