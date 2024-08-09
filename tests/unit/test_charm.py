@@ -9,7 +9,7 @@ from unittest.mock import Mock, PropertyMock, patch
 import pytest
 import yaml
 from charm import CONFIG_FILE_NAME, NRF_RELATION_NAME, TLS_RELATION_NAME, UDMOperatorCharm
-from charms.tls_certificates_interface.v3.tls_certificates import (  # type: ignore[import]
+from charms.tls_certificates_interface.v3.tls_certificates import (
     ProviderCertificate,
 )
 from cryptography.hazmat.primitives import serialization
@@ -84,7 +84,7 @@ class TestCharm:
         self.mock_generate_csr.return_value = CSR.encode()
 
     @pytest.fixture(autouse=True)
-    def harness(self, setUp, request, mock_default_values):
+    def setup_harness(self, setUp, request, mock_default_values):
         self.harness = testing.Harness(UDMOperatorCharm)
         self.harness.set_model_name(name="whatever")
         self.harness.set_leader(is_leader=True)
@@ -95,8 +95,8 @@ class TestCharm:
 
     @pytest.fixture()
     def add_storage(self) -> None:
-        self.harness.add_storage(storage_name="certs", attach=True)  # type:ignore
-        self.harness.add_storage(storage_name="config", attach=True)  # type:ignore
+        self.harness.add_storage(storage_name="certs", attach=True)
+        self.harness.add_storage(storage_name="config", attach=True)
 
     @staticmethod
     def _get_metadata() -> dict:
@@ -107,14 +107,14 @@ class TestCharm:
 
     @pytest.fixture()
     def sdcore_config_relation_id(self) -> Generator[int, None, None]:
-        sdcore_config_relation_id = self.harness.add_relation(  # type:ignore
+        sdcore_config_relation_id = self.harness.add_relation(
             relation_name=SDCORE_CONFIG_RELATION_NAME,
             remote_app=NMS_APPLICATION_NAME,
         )
-        self.harness.add_relation_unit(  # type:ignore
+        self.harness.add_relation_unit(
             relation_id=sdcore_config_relation_id, remote_unit_name=f"{NMS_APPLICATION_NAME}/0"
         )
-        self.harness.update_relation_data(  # type:ignore
+        self.harness.update_relation_data(
             relation_id=sdcore_config_relation_id,
             app_or_unit=NMS_APPLICATION_NAME,
             key_values={
@@ -139,22 +139,22 @@ class TestCharm:
 
     def _create_nrf_relation(self) -> int:
         """Create NRF relation and return its relation id."""
-        relation_id = self.harness.add_relation(  # type:ignore
+        relation_id = self.harness.add_relation(
             relation_name=NRF_RELATION_NAME, remote_app="nrf-operator"
         )
-        self.harness.add_relation_unit(relation_id=relation_id, remote_unit_name="nrf-operator/0")  # type:ignore
+        self.harness.add_relation_unit(relation_id=relation_id, remote_unit_name="nrf-operator/0")
         return relation_id
 
     def _create_certificates_relation(self):
-        relation_id = self.harness.add_relation(  # type:ignore
+        relation_id = self.harness.add_relation(
             relation_name=TLS_RELATION_NAME, remote_app="tls-certificates-operator"
         )
-        self.harness.add_relation_unit(  # type:ignore
+        self.harness.add_relation_unit(
             relation_id=relation_id, remote_unit_name="tls-certificates-operator/0"
         )
 
     def _write_keys_csr_and_certificate_files(self) -> None:
-        root = self.harness.get_filesystem_root(self.container_name)  # type:ignore
+        root = self.harness.get_filesystem_root(self.container_name)
         (root / PRIVATE_KEY_PATH).write_text(PRIVATE_KEY)
         (root / HOME_NETWORK_KEY_PATH).write_text(HOME_NETWORK_KEY)
         (root / CERTIFICATE_PATH).write_text(CERTIFICATE)
