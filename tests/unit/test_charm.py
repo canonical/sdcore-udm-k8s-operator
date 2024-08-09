@@ -35,7 +35,7 @@ PRIVATE_KEY_PATH = "support/TLS/udm.key"
 VALID_NRF_URL = "https://nrf:443"
 WEBUI_URL = "sdcore-webui:9876"
 SDCORE_CONFIG_RELATION_NAME = "sdcore_config"
-WEBUI_APPLICATION_NAME = "sdcore-webui-operator"
+NMS_APPLICATION_NAME = "sdcore-nms-operator"
 
 
 class TestCharm:
@@ -52,7 +52,7 @@ class TestCharm:
     )  # noqa E501
     patcher_request_cert_creation = patch(f"{CERTIFICATES_LIB}.request_certificate_creation")
     patcher_webui_url = patch(
-        "charms.sdcore_webui_k8s.v0.sdcore_config.SdcoreConfigRequires.webui_url",
+        "charms.sdcore_nms_k8s.v0.sdcore_config.SdcoreConfigRequires.webui_url",
         new_callable=PropertyMock,
     )
 
@@ -109,14 +109,14 @@ class TestCharm:
     def sdcore_config_relation_id(self) -> Generator[int, None, None]:
         sdcore_config_relation_id = self.harness.add_relation(
             relation_name=SDCORE_CONFIG_RELATION_NAME,
-            remote_app=WEBUI_APPLICATION_NAME,
+            remote_app=NMS_APPLICATION_NAME,
         )
         self.harness.add_relation_unit(
-            relation_id=sdcore_config_relation_id, remote_unit_name=f"{WEBUI_APPLICATION_NAME}/0"
+            relation_id=sdcore_config_relation_id, remote_unit_name=f"{NMS_APPLICATION_NAME}/0"
         )
         self.harness.update_relation_data(
             relation_id=sdcore_config_relation_id,
-            app_or_unit=WEBUI_APPLICATION_NAME,
+            app_or_unit=NMS_APPLICATION_NAME,
             key_values={
                 "webui_url": WEBUI_URL,
             },
