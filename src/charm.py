@@ -196,6 +196,7 @@ class UDMOperatorCharm(CharmBase):
         if not self._certificate_is_available():
             event.add_status(WaitingStatus("Waiting for certificates to be available"))
             logger.info("Waiting for certificates to be available")
+            return
 
         if not self._udm_service_is_running():
             event.add_status(WaitingStatus("Waiting for UDM service to start"))
