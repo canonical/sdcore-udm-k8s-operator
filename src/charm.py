@@ -20,12 +20,13 @@ from charms.tls_certificates_interface.v3.tls_certificates import (  # type: ign
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from jinja2 import Environment, FileSystemLoader
-from key_gen_utils import generate_x25519_private_key
 from ops import ActiveStatus, BlockedStatus, CollectStatusEvent, ModelError, WaitingStatus
 from ops.charm import ActionEvent, CharmBase
 from ops.framework import EventBase
 from ops.main import main
 from ops.pebble import Layer
+
+from key_gen_utils import generate_x25519_private_key
 
 logger = logging.getLogger(__name__)
 
@@ -393,9 +394,7 @@ class UDMOperatorCharm(CharmBase):
         """
         plan = self._container.get_plan()
         if plan.services != self._pebble_layer.services:
-            self._container.add_layer(
-                self._container_name, self._pebble_layer, combine=True
-            )
+            self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
             self._container.replan()
             logger.info("New layer added: %s", self._pebble_layer)
         if restart:
