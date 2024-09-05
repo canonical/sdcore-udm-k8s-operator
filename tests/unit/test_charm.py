@@ -6,7 +6,6 @@ import unittest
 from unittest.mock import Mock, PropertyMock, patch
 
 import yaml
-from charm import CONFIG_FILE_NAME, NRF_RELATION_NAME, TLS_RELATION_NAME, UDMOperatorCharm
 from charms.tls_certificates_interface.v3.tls_certificates import (  # type: ignore[import]
     ProviderCertificate,
 )
@@ -14,6 +13,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from ops import testing
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
+
+from charm import CONFIG_FILE_NAME, NRF_RELATION_NAME, TLS_RELATION_NAME, UDMOperatorCharm
 
 logger = logging.getLogger(__name__)
 
@@ -492,7 +493,6 @@ class TestCharm(unittest.TestCase):
     def test_given_config_file_is_written_when_configure_sdcore_udm_is_called_then_status_is_active(  # noqa: E501
         self, _, patched_nrf_url, patch_check_output, patch_get_assigned_certificates
     ):
-
         self.harness.set_can_connect(container=self.container_name, val=True)
         self.harness.add_storage(storage_name="certs", attach=True)
         self.harness.add_storage(storage_name="config", attach=True)
