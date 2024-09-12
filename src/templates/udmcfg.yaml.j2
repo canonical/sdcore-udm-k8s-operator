@@ -8,9 +8,8 @@ configuration:
     registerIPv4: {{ pod_ip }}
     scheme: {{ scheme }}
     tls:
-      key: free5gc/support/TLS/udm.key
-      log: free5gc/udmsslkey.log
-      pem: free5gc/support/TLS/udm.pem
+      key: /support/TLS/udm.key
+      pem: /support/TLS/udm.pem
   serviceList:
   - nudm-sdm
   - nudm-uecm
