@@ -19,11 +19,11 @@ class TestCharmCertificatesRelationBroken(UDMUnitTestFixtures):
             )
             certs_mount = scenario.Mount(
                 location="/support/TLS",
-                src=tempdir,
+                source=tempdir,
             )
             config_mount = scenario.Mount(
                 location="/etc/udm/",
-                src=tempdir,
+                source=tempdir,
             )
             container = scenario.Container(
                 name="udm",
@@ -44,7 +44,7 @@ class TestCharmCertificatesRelationBroken(UDMUnitTestFixtures):
                 leader=True,
             )
 
-            self.ctx.run(certificates_relation.broken_event, state_in)
+            self.ctx.run(self.ctx.on.relation_broken(certificates_relation), state_in)
 
             assert not os.path.exists(f"{tempdir}/udm.pem")
             assert not os.path.exists(f"{tempdir}/udm.key")
