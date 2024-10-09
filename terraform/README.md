@@ -35,7 +35,7 @@ Create the integrations, for instance:
 
 ```text
 resource "juju_integration" "udm-nms" {
-  model = var.model_name
+  model = juju_model.my_model.name
 
   application {
     name     = module.udm.app_name
