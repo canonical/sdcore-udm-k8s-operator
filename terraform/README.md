@@ -11,16 +11,20 @@ The base module is not intended to be deployed in separation (it is possible tho
 - **main.tf** - Defines the Juju application to be deployed.
 - **variables.tf** - Allows customization of the deployment options (Juju model name, channel or application name).
 - **output.tf** - Responsible for integrating the module with other Terraform modules, primarily by defining potential integration endpoints (charm integrations), but also by exposing the application name.
-- **terraform.tf** - Defines the Terraform provider.
+- **versions.tf** - Defines the Terraform provider.
 
 ## Using sdcore-udm-k8s base module in higher level modules
 
 If you want to use `sdcore-udm-k8s` base module as part of your Terraform module, import it like shown below.
 
 ```text
-module "sdcore-udm-k8s" {
+data "juju_model" "my_model" {
+  name = "my_model_name"
+}
+
+module "udm" {
   source                 = "git::https://github.com/canonical/sdcore-udm-k8s-operator//terraform"
-  model_name             = "juju_model_name"  
+  model = juju_model.my_model.name
   # Optional Configurations
   # channel                        = "put the Charm channel here" 
   # app_name                       = "put the application name here" 
@@ -30,17 +34,17 @@ module "sdcore-udm-k8s" {
 Create the integrations, for instance:
 
 ```text
-resource "juju_integration" "udm-certificates" {
-  model = var.model_name
+resource "juju_integration" "udm-nms" {
+  model = juju_model.my_model.name
 
   application {
     name     = module.udm.app_name
-    endpoint = module.udm.certificates_endpoint
+    endpoint = module.udm.requires.sdcore_config
   }
 
   application {
-    name     = module.self-signed-certificates.app_name
-    endpoint = module.self-signed-certificates.certificates_endpoint
+    name     = module.nms.app_name
+    endpoint = module.nms.provides.sdcore_config
   }
 }
 ```
