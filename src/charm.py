@@ -26,10 +26,9 @@ from charms.tls_certificates_interface.v4.tls_certificates import (
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from jinja2 import Environment, FileSystemLoader
-from ops import ActiveStatus, BlockedStatus, CollectStatusEvent, ModelError, WaitingStatus
+from ops import ActiveStatus, BlockedStatus, CollectStatusEvent, ModelError, WaitingStatus, main
 from ops.charm import ActionEvent, CharmBase
 from ops.framework import EventBase
-from ops.main import main
 from ops.pebble import Layer
 
 from key_gen_utils import generate_x25519_private_key
