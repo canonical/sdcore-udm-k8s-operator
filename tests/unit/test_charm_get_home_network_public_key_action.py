@@ -4,7 +4,7 @@
 import tempfile
 
 import pytest
-import scenario
+from ops import testing
 from ops.testing import ActionFailed
 
 from tests.unit.fixtures import UDMUnitTestFixtures
@@ -12,11 +12,11 @@ from tests.unit.fixtures import UDMUnitTestFixtures
 
 class TestCharmGetHomeNetworkPublicKeyAction(UDMUnitTestFixtures):
     def test_given_cant_connect_when_get_home_network_public_key_action_then_event_fails(self):
-        container = scenario.Container(
+        container = testing.Container(
             name="udm",
             can_connect=False,
         )
-        state_in = scenario.State(
+        state_in = testing.State(
             leader=True,
             containers=[container],
         )
@@ -28,16 +28,16 @@ class TestCharmGetHomeNetworkPublicKeyAction(UDMUnitTestFixtures):
 
     def test_given_key_not_stored_when_get_home_network_public_key_action_then_event_fails(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            certs_mount = scenario.Mount(
+            certs_mount = testing.Mount(
                 location="/support/TLS",
                 source=temp_dir,
             )
-            container = scenario.Container(
+            container = testing.Container(
                 name="udm",
                 can_connect=True,
                 mounts={"certs": certs_mount},
             )
-            state_in = scenario.State(
+            state_in = testing.State(
                 leader=True,
                 containers=[container],
             )
@@ -49,16 +49,16 @@ class TestCharmGetHomeNetworkPublicKeyAction(UDMUnitTestFixtures):
 
     def test_given_stored_when_get_home_network_public_key_action_then_key_returned(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config_mount = scenario.Mount(
+            config_mount = testing.Mount(
                 location="/etc/udm/",
                 source=temp_dir,
             )
-            container = scenario.Container(
+            container = testing.Container(
                 name="udm",
                 can_connect=True,
                 mounts={"config": config_mount},
             )
-            state_in = scenario.State(
+            state_in = testing.State(
                 leader=True,
                 containers=[container],
             )
