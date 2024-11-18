@@ -3,7 +3,6 @@
 # See LICENSE file for licensing details.
 
 
-import asyncio
 import logging
 from collections import Counter
 from pathlib import Path
@@ -49,6 +48,9 @@ async def _deploy_nrf(ops_test: OpsTest):
         channel=NRF_APP_CHANNEL,
         trust=True,
     )
+    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=TLS_PROVIDER_APP_NAME)
+    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=NMS_CHARM_NAME)
+    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=DATABASE_APP_NAME)
 
 
 async def _deploy_nms(ops_test: OpsTest):
@@ -58,6 +60,13 @@ async def _deploy_nms(ops_test: OpsTest):
         application_name=NMS_CHARM_NAME,
         channel=NMS_CHARM_CHANNEL,
     )
+    await ops_test.model.integrate(
+        relation1=f"{NMS_CHARM_NAME}:common_database", relation2=DATABASE_APP_NAME
+    )
+    await ops_test.model.integrate(
+        relation1=f"{NMS_CHARM_NAME}:auth_database", relation2=DATABASE_APP_NAME
+    )
+    await ops_test.model.integrate(relation1=NMS_CHARM_NAME, relation2=TLS_PROVIDER_APP_NAME)
 
 
 async def _deploy_grafana_agent(ops_test: OpsTest):
@@ -84,26 +93,7 @@ async def _deploy_tls_provider(ops_test: OpsTest):
 async def deploy(ops_test: OpsTest, request):
     """Deploy necessary components."""
     assert ops_test.model
-    deploy_database = asyncio.create_task(_deploy_database(ops_test))
-    deploy_nrf = asyncio.create_task(_deploy_nrf(ops_test))
-    deploy_tls = asyncio.create_task(_deploy_tls_provider(ops_test))
-    deploy_grafana_agent = asyncio.create_task(_deploy_grafana_agent(ops_test))
-    deploy_nms = asyncio.create_task(_deploy_nms(ops_test))
     charm = Path(request.config.getoption("--charm_path")).resolve()
-    await deploy_database
-    await deploy_tls
-    await deploy_nrf
-    await deploy_grafana_agent
-    await deploy_nms
-    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=TLS_PROVIDER_APP_NAME)
-    await ops_test.model.integrate(relation1=DATABASE_APP_NAME, relation2=NRF_APP_NAME)
-    await ops_test.model.integrate(
-        relation1=f"{NMS_CHARM_NAME}:common_database", relation2=f"{DATABASE_APP_NAME}"
-    )
-    await ops_test.model.integrate(
-        relation1=f"{NMS_CHARM_NAME}:auth_database", relation2=f"{DATABASE_APP_NAME}"
-    )
-    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=NMS_CHARM_NAME)
     resources = {
         "udm-image": METADATA["resources"]["udm-image"]["upstream-source"],
     }
@@ -113,6 +103,11 @@ async def deploy(ops_test: OpsTest, request):
         application_name=APPLICATION_NAME,
         trust=True,
     )
+    await _deploy_database(ops_test)
+    await _deploy_tls_provider(ops_test)
+    await _deploy_grafana_agent(ops_test)
+    await _deploy_nms(ops_test)
+    await _deploy_nrf(ops_test)
 
 
 @pytest.mark.abort_on_fail
@@ -164,9 +159,6 @@ async def test_remove_nrf_and_wait_for_blocked_status(ops_test: OpsTest, deploy)
 async def test_restore_nrf_and_wait_for_active_status(ops_test: OpsTest, deploy):
     assert ops_test.model
     await _deploy_nrf(ops_test)
-    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=TLS_PROVIDER_APP_NAME)
-    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=NMS_CHARM_NAME)
-    await ops_test.model.integrate(relation1=DATABASE_APP_NAME, relation2=NRF_APP_NAME)
     await ops_test.model.integrate(relation1=APPLICATION_NAME, relation2=NRF_APP_NAME)
     await ops_test.model.wait_for_idle(apps=[APPLICATION_NAME], status="active", timeout=TIMEOUT)
 
@@ -183,6 +175,8 @@ async def test_restore_tls_and_wait_for_active_status(ops_test: OpsTest, deploy)
     assert ops_test.model
     await _deploy_tls_provider(ops_test)
     await ops_test.model.integrate(relation1=APPLICATION_NAME, relation2=TLS_PROVIDER_APP_NAME)
+    await ops_test.model.integrate(relation1=NMS_CHARM_NAME, relation2=TLS_PROVIDER_APP_NAME)
+    await ops_test.model.integrate(relation1=NRF_APP_NAME, relation2=TLS_PROVIDER_APP_NAME)
     await ops_test.model.wait_for_idle(apps=[APPLICATION_NAME], status="active", timeout=TIMEOUT)
 
 
@@ -197,12 +191,6 @@ async def test_remove_nms_and_wait_for_blocked_status(ops_test: OpsTest, deploy)
 async def test_restore_nms_and_wait_for_active_status(ops_test: OpsTest, deploy):
     assert ops_test.model
     await _deploy_nms(ops_test)
-    await ops_test.model.integrate(
-        relation1=f"{NMS_CHARM_NAME}:common_database", relation2=f"{DATABASE_APP_NAME}"
-    )
-    await ops_test.model.integrate(
-        relation1=f"{NMS_CHARM_NAME}:auth_database", relation2=f"{DATABASE_APP_NAME}"
-    )
     await ops_test.model.integrate(
         relation1=f"{APPLICATION_NAME}:sdcore_config",
         relation2=f"{NMS_CHARM_NAME}:sdcore_config",
