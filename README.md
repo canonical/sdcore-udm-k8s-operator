@@ -6,7 +6,7 @@ A Charmed Operator for Aether SD-Core's Unified Data Manager (UDM) component for
 ## Usage
 
 ```bash
-juju deploy mongodb-k8s --channel 6/beta --trust
+juju deploy mongodb-k8s --channel 6/stable --trust
 juju deploy sdcore-nrf-k8s --channel=1.5/edge
 juju deploy sdcore-udm-k8s --channel=1.5/edge
 juju deploy sdcore-nms-k8s --channel=1.5/edge
