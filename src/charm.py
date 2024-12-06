@@ -7,7 +7,7 @@
 import logging
 from ipaddress import IPv4Address
 from subprocess import check_output
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from charms.loki_k8s.v1.loki_push_api import LogForwarder
 from charms.prometheus_k8s.v0.prometheus_scrape import (
@@ -159,6 +159,13 @@ class UDMOperatorCharm(CharmBase):
             logger.info("Waiting for container to be ready")
             return
 
+        if invalid_configs := self._get_invalid_configs():
+            event.add_status(
+                BlockedStatus(f"The following configurations are not valid: {invalid_configs}")
+            )
+            logger.info("The following configurations are not valid: %s", invalid_configs)
+            return
+
         self.unit.set_workload_version(self._get_workload_version())
 
         if missing_relations := self._missing_relations():
@@ -226,6 +233,9 @@ class UDMOperatorCharm(CharmBase):
             ready_to_configure: True if all conditions are met else False
         """
         if not self._container.can_connect():
+            return False
+
+        if self._get_invalid_configs():
             return False
 
         if self._missing_relations():
@@ -345,6 +355,9 @@ class UDMOperatorCharm(CharmBase):
             return ""
         if not self._webui_requires.webui_url:
             return ""
+        if not (log_level := self._get_log_level_config()):
+            return ""
+
         return self._render_config_file(
             nrf_url=self._nrf_requires.nrf_url,
             udm_sbi_port=UDM_SBI_PORT,
@@ -352,6 +365,7 @@ class UDMOperatorCharm(CharmBase):
             scheme="https",
             _home_network_private_key=self._get_home_network_private_key(),
             webui_uri=self._webui_requires.webui_url,
+            log_level=log_level,
         )
 
     def _on_certificates_relation_broken(self, event: EventBase) -> None:
@@ -429,6 +443,24 @@ class UDMOperatorCharm(CharmBase):
             return version_file_content
         return ""
 
+    def _get_invalid_configs(self) -> list[str]:
+        """Return list of invalid configurations.
+
+        Returns:
+            list: List of strings matching config keys.
+        """
+        invalid_configs = []
+        if not self._is_log_level_valid():
+            invalid_configs.append("log-level")
+        return invalid_configs
+
+    def _get_log_level_config(self) -> Optional[str]:
+        return cast(Optional[str], self.model.config.get("log-level"))
+
+    def _is_log_level_valid(self) -> bool:
+        log_level = self._get_log_level_config()
+        return log_level in ["debug", "info", "warn", "error", "fatal", "panic"]
+
     def _configure_pebble(self, restart: bool = False) -> None:
         """Configure the Pebble layer.
 
@@ -487,6 +519,7 @@ class UDMOperatorCharm(CharmBase):
         scheme: str,
         _home_network_private_key: str,
         webui_uri: str,
+        log_level: str,
     ) -> str:
         """Render the config file content.
 
@@ -496,6 +529,7 @@ class UDMOperatorCharm(CharmBase):
             pod_ip (str): UDM pod IPv4.
             scheme (str): SBI interface scheme ("http" or "https")
             webui_uri (str) : URL of the Webui
+            log_level (str): Log level for the AMF.
 
         Returns:
             str: Config file content.
@@ -509,6 +543,7 @@ class UDMOperatorCharm(CharmBase):
             scheme=scheme,
             _home_network_private_key=_home_network_private_key,
             webui_uri=webui_uri,
+            log_level=log_level,
         )
 
     def _config_file_is_written(self) -> bool:
