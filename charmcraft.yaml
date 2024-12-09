@@ -76,6 +76,13 @@ parts:
       uv export --frozen --no-dev -o requirements.txt
       craftctl default
 
+config:
+  options:
+    log-level:
+      type: string
+      default: info
+      description: Log level for the UDM. One of `debug`, `info`, `warn`, `error`, `fatal`, `panic`.
+
 actions:
   get-home-network-public-key:
     description: Returns the public key for Home Network.
