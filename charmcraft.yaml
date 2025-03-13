@@ -24,7 +24,7 @@ resources:
   udm-image:
     type: oci-image
     description: OCI image for SD-Core's UDM
-    upstream-source: ghcr.io/canonical/sdcore-udm:1.5.1
+    upstream-source: ghcr.io/canonical/sdcore-udm:1.6.1
 
 storage:
   config:

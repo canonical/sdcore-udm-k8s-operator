@@ -182,7 +182,7 @@ class TestCharmConfigure(UDMUnitTestFixtures):
                             "udm": {
                                 "startup": "enabled",
                                 "override": "replace",
-                                "command": "/bin/udm --udmcfg /etc/udm/udmcfg.yaml",
+                                "command": "/bin/udm --cfg /etc/udm/udmcfg.yaml",
                                 "environment": {
                                     "POD_IP": "1.1.1.1",
                                     "MANAGED_BY_CONFIG_POD": "true",
