@@ -9,8 +9,8 @@ configuration:
     registerIPv4: {{ pod_ip }}
     scheme: {{ scheme }}
     tls:
-      key: /support/TLS/udm.key
-      pem: /support/TLS/udm.pem
+      key: {{ tls_key }}
+      pem: {{ tls_pem }}
   enableNrfCaching: true
   nrfCacheEvictionInterval: 900
   serviceList:

@@ -200,11 +200,11 @@ class TestCharmCollectStatus(UDMUnitTestFixtures):
                 interface="sdcore_config",
             )
             config_mount = testing.Mount(
-                location="/etc/udm/",
+                location="/sdcore/config/",
                 source=temp_dir,
             )
             certs_mount = testing.Mount(
-                location="/support/TLS/",
+                location="/sdcore/certs/",
                 source=temp_dir,
             )
             container = testing.Container(
@@ -244,11 +244,11 @@ class TestCharmCollectStatus(UDMUnitTestFixtures):
                 interface="sdcore_config",
             )
             config_mount = testing.Mount(
-                location="/etc/udm/",
+                location="/sdcore/config/",
                 source=temp_dir,
             )
             certs_mount = testing.Mount(
-                location="/support/TLS/",
+                location="/sdcore/certs/",
                 source=temp_dir,
             )
             container = testing.Container(
@@ -288,11 +288,11 @@ class TestCharmCollectStatus(UDMUnitTestFixtures):
                 interface="sdcore_config",
             )
             config_mount = testing.Mount(
-                location="/etc/udm/",
+                location="/sdcore/config/",
                 source=temp_dir,
             )
             certs_mount = testing.Mount(
-                location="/support/TLS/",
+                location="/sdcore/certs/",
                 source=temp_dir,
             )
             container = testing.Container(
@@ -335,11 +335,11 @@ class TestCharmCollectStatus(UDMUnitTestFixtures):
                 interface="sdcore_config",
             )
             config_mount = testing.Mount(
-                location="/etc/udm/",
+                location="/sdcore/config/",
                 source=temp_dir,
             )
             certs_mount = testing.Mount(
-                location="/support/TLS/",
+                location="/sdcore/certs/",
                 source=temp_dir,
             )
             container = testing.Container(
@@ -383,11 +383,11 @@ class TestCharmCollectStatus(UDMUnitTestFixtures):
                 interface="sdcore_config",
             )
             config_mount = testing.Mount(
-                location="/etc/udm/",
+                location="/sdcore/config/",
                 source=temp_dir,
             )
             certs_mount = testing.Mount(
-                location="/support/TLS/",
+                location="/sdcore/certs/",
                 source=temp_dir,
             )
             container = testing.Container(

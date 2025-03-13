@@ -36,14 +36,14 @@ from key_gen_utils import generate_x25519_private_key
 logger = logging.getLogger(__name__)
 
 PROMETHEUS_PORT = 8080
-BASE_CONFIG_PATH = "/etc/udm"
+BASE_CONFIG_PATH = "/sdcore/config"
 CONFIG_FILE_NAME = "udmcfg.yaml"
 UDM_SBI_PORT = 29503
 NRF_RELATION_NAME = "fiveg_nrf"
 TLS_RELATION_NAME = "certificates"
 HOME_NETWORK_KEY_NAME = "home_network.key"
-HOME_NETWORK_KEY_PATH = f"/etc/udm/{HOME_NETWORK_KEY_NAME}"
-CERTS_DIR_PATH = "/support/TLS"  # Certificate paths are hardcoded in UDM code
+HOME_NETWORK_KEY_PATH = f"/sdcore/config/{HOME_NETWORK_KEY_NAME}"
+CERTS_DIR_PATH = "/sdcore/certs"
 PRIVATE_KEY_NAME = "udm.key"
 CERTIFICATE_NAME = "udm.pem"
 CERTIFICATE_COMMON_NAME = "udm.sdcore"
@@ -363,6 +363,8 @@ class UDMOperatorCharm(CharmBase):
             udm_sbi_port=UDM_SBI_PORT,
             pod_ip=pod_ip,
             scheme="https",
+            tls_pem=f"{CERTS_DIR_PATH}/{CERTIFICATE_NAME}",
+            tls_key=f"{CERTS_DIR_PATH}/{PRIVATE_KEY_NAME}",
             _home_network_private_key=self._get_home_network_private_key(),
             webui_uri=self._webui_requires.webui_url,
             log_level=log_level,
@@ -519,6 +521,8 @@ class UDMOperatorCharm(CharmBase):
         scheme: str,
         _home_network_private_key: str,
         webui_uri: str,
+        tls_pem: str,
+        tls_key: str,
         log_level: str,
     ) -> str:
         """Render the config file content.
@@ -529,6 +533,8 @@ class UDMOperatorCharm(CharmBase):
             pod_ip (str): UDM pod IPv4.
             scheme (str): SBI interface scheme ("http" or "https")
             webui_uri (str) : URL of the Webui
+            tls_pem (str): Path to the TLS certificate.
+            tls_key (str): Path to the TLS private key.
             log_level (str): Log level for the AMF.
 
         Returns:
@@ -543,6 +549,8 @@ class UDMOperatorCharm(CharmBase):
             scheme=scheme,
             _home_network_private_key=_home_network_private_key,
             webui_uri=webui_uri,
+            tls_pem=tls_pem,
+            tls_key=tls_key,
             log_level=log_level,
         )
 

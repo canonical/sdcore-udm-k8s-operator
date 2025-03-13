@@ -9,8 +9,8 @@ configuration:
     registerIPv4: 1.1.1.1
     scheme: https
     tls:
-      key: /support/TLS/udm.key
-      pem: /support/TLS/udm.pem
+      key: /sdcore/certs/udm.key
+      pem: /sdcore/certs/udm.pem
   enableNrfCaching: true
   nrfCacheEvictionInterval: 900
   serviceList:
