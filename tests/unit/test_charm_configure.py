@@ -30,11 +30,11 @@ class TestCharmConfigure(UDMUnitTestFixtures):
                 interface="sdcore_config",
             )
             config_mount = testing.Mount(
-                location="/etc/udm//",
+                location="/sdcore/config//",
                 source=temp_dir,
             )
             certs_mount = testing.Mount(
-                location="/support/TLS",
+                location="/sdcore/certs",
                 source=temp_dir,
             )
             container = testing.Container(
@@ -84,11 +84,11 @@ class TestCharmConfigure(UDMUnitTestFixtures):
                 interface="sdcore_config",
             )
             config_mount = testing.Mount(
-                location="/etc/udm//",
+                location="/sdcore/config//",
                 source=temp_dir,
             )
             certs_mount = testing.Mount(
-                location="/support/TLS",
+                location="/sdcore/certs",
                 source=temp_dir,
             )
             container = testing.Container(
@@ -144,11 +144,11 @@ class TestCharmConfigure(UDMUnitTestFixtures):
                 interface="sdcore_config",
             )
             config_mount = testing.Mount(
-                location="/etc/udm//",
+                location="/sdcore/config//",
                 source=temp_dir,
             )
             certs_mount = testing.Mount(
-                location="/support/TLS",
+                location="/sdcore/certs",
                 source=temp_dir,
             )
             container = testing.Container(
@@ -182,7 +182,7 @@ class TestCharmConfigure(UDMUnitTestFixtures):
                             "udm": {
                                 "startup": "enabled",
                                 "override": "replace",
-                                "command": "/bin/udm --cfg /etc/udm/udmcfg.yaml",
+                                "command": "/bin/udm --cfg /sdcore/config/udmcfg.yaml",
                                 "environment": {
                                     "POD_IP": "1.1.1.1",
                                     "MANAGED_BY_CONFIG_POD": "true",

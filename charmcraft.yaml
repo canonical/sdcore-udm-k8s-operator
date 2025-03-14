@@ -16,9 +16,9 @@ containers:
     resource: udm-image
     mounts:
       - storage: config
-        location: /etc/udm/
+        location: /sdcore/config
       - storage: certs
-        location: /support/TLS
+        location: /sdcore/certs
 
 resources:
   udm-image:

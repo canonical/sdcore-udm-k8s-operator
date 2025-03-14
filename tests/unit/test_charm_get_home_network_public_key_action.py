@@ -29,7 +29,7 @@ class TestCharmGetHomeNetworkPublicKeyAction(UDMUnitTestFixtures):
     def test_given_key_not_stored_when_get_home_network_public_key_action_then_event_fails(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             certs_mount = testing.Mount(
-                location="/support/TLS",
+                location="/sdcore/certs",
                 source=temp_dir,
             )
             container = testing.Container(
@@ -50,7 +50,7 @@ class TestCharmGetHomeNetworkPublicKeyAction(UDMUnitTestFixtures):
     def test_given_stored_when_get_home_network_public_key_action_then_key_returned(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config_mount = testing.Mount(
-                location="/etc/udm/",
+                location="/sdcore/config/",
                 source=temp_dir,
             )
             container = testing.Container(
